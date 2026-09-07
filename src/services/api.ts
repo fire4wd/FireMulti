@@ -13,6 +13,7 @@ import {
   BBPlayerStat,
   BBDashboardData,
   BBUser,
+  BBBestLineupsResult,
   AndaCategory,
   AndaRecipe,
   AndaRecipeDetail,
@@ -241,6 +242,13 @@ export const api = {
     const query = user ? `?user=${encodeURIComponent(user)}` : '';
     const res = await fetch(`/api/bbeater/dashboard${query}`, { headers: getHeaders() });
     if (!res.ok) throw new Error('Errore nel recupero dashboard BuzzerBeater');
+    return res.json();
+  },
+
+  async getBBLineups(user?: string): Promise<BBBestLineupsResult> {
+    const query = user ? `?user=${encodeURIComponent(user)}` : '';
+    const res = await fetch(`/api/bbeater/lineups${query}`, { headers: getHeaders() });
+    if (!res.ok) throw new Error('Errore nel recupero dei migliori quintetti');
     return res.json();
   },
 

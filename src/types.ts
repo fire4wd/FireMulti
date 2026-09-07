@@ -203,6 +203,22 @@ export interface BBMinute {
   fine?: string;
 }
 
+export interface BBWeeklyPositionMinutes {
+  playerid: string;
+  name: string;
+  pos: string;
+  game_shape: number;
+  age?: number;
+  salary?: number;
+  min_pg: number;
+  min_sg: number;
+  min_sf: number;
+  min_pf: number;
+  min_c: number;
+  total_min: number;
+  matches_count?: number;
+}
+
 export interface BBMatch {
   id: number;
   user_id?: number;
@@ -270,6 +286,45 @@ export interface BBTeam {
 
 export type BBUser = BBTeam;
 
+export interface BBLineupPlayer {
+  pos: 'SF' | 'C' | 'PG' | 'PF' | 'SG';
+  playerid: string;
+  nome: string;
+  age: number;
+  value: number;
+  originalPos?: string;
+  salary?: number;
+  dmi?: number;
+  height?: string;
+  potential?: number;
+  PG: number;
+  SG: number;
+  SF: number;
+  PF: number;
+  C: number;
+}
+
+export interface BBLineup {
+  name: string;
+  total: number;
+  players: BBLineupPlayer[];
+}
+
+export interface BBBestLineupsResult {
+  period: { inizio: string; fine: string };
+  positions: ('SF' | 'C' | 'PG' | 'PF' | 'SG')[];
+  totalPlayersAnalyzed: number;
+  bestLineup: BBLineup;
+  secondBestLineup: BBLineup;
+  thirdBestLineup: BBLineup;
+  totalsSummary: {
+    first: number;
+    second: number;
+    third: number;
+  };
+  timetogo: BBLineupPlayer[];
+}
+
 export interface BBDashboardData {
   currentUser?: {
     username: string;
@@ -286,9 +341,16 @@ export interface BBDashboardData {
   optimalShapePlayers: number;
   lastMatch: BBMatch | null;
   nextMatch: BBMatch | null;
+  currentPeriod?: {
+    inizio: string;
+    fine: string;
+    today: string;
+  };
   roster?: BBPlayer[];
   matches?: BBMatch[];
   minutes?: BBMinute[];
+  matchMinutes?: BBMinute[];
+  weeklyPositionMinutes?: BBWeeklyPositionMinutes[];
   stats?: BBPlayerStat[];
 }
 

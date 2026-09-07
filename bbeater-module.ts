@@ -82,6 +82,25 @@ export function setupBBeater(db: DatabaseType, getUserFn?: (req: Request) => { u
     };
   }
 
+  // Helper per calcolare il periodo di riferimento settimanale (Venerdì - Venerdì come in BuzzerBeater)
+  // e la data odierna per la condizione di filtro: data odierna >= inizio AND data odierna < fine
+  function getBBeaterPeriod(baseDate: Date = new Date()): { inizio: string; fine: string; today: string } {
+    const today = new Date(baseDate);
+    const pyWeekday = (today.getDay() + 6) % 7; // 0=Mon, 4=Fri, 6=Sun
+    const diffToLastFriday = (pyWeekday + 3) % 7;
+    const lastFriday = new Date(today);
+    lastFriday.setDate(today.getDate() - diffToLastFriday);
+    const nextFriday = new Date(lastFriday);
+    nextFriday.setDate(lastFriday.getDate() + 7);
+
+    const formatDate = (d: Date) => d.toISOString().split('T')[0];
+    return {
+      inizio: formatDate(lastFriday),
+      fine: formatDate(nextFriday),
+      today: formatDate(today)
+    };
+  }
+
   // 1. INIZIALIZZAZIONE TABELLE BUZZERBEATER SECONDO LO SCHEMA SQLITE
   db.exec(`
     CREATE TABLE IF NOT EXISTS "users" (
@@ -227,7 +246,6 @@ export function setupBBeater(db: DatabaseType, getUserFn?: (req: Request) => { u
       minuti_giocati INTEGER, 
       inizio DATE, 
       fine DATE, 
-      FOREIGN KEY(match_id) REFERENCES partite (id), 
       FOREIGN KEY(user_id) REFERENCES utenti (id)
     );
 
@@ -589,9 +607,10 @@ export function setupBBeater(db: DatabaseType, getUserFn?: (req: Request) => { u
       )
     `);
 
+    const seedPeriod = getBBeaterPeriod();
     const insertMinute = db.prepare(`
-      INSERT INTO minutigiocati (user_id, playerid, player_name, position, minuti_giocati, inizio, fine)
-      VALUES (1, ?, ?, ?, ?, date('now', '-7 days'), date('now'))
+      INSERT INTO minutigiocati (user_id, playerid, player_name, position, minuti_giocati, inizio, fine, match_id)
+      VALUES (1, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     for (const p of demoPlayers) {
@@ -629,8 +648,16 @@ export function setupBBeater(db: DatabaseType, getUserFn?: (req: Request) => { u
         giocatore_id: gId
       });
 
-      insertMinute.run(p.playerid, p.name, p.pos, p.min);
+      insertMinute.run(p.playerid, p.name, p.pos, p.min, seedPeriod.inizio, seedPeriod.fine, 139975080);
     }
+
+    // Record di esempio come indicato dall'utente (match_id: 139975089, playerid: 55025326)
+    try {
+      db.prepare(`
+        INSERT OR IGNORE INTO minutigiocati (id, match_id, user_id, playerid, player_name, position, minuti_giocati, inizio, fine)
+        VALUES (6059, 139975089, 1, '55025326', 'Brendan Bassett', 'PG', 0, ?, ?)
+      `).run(seedPeriod.inizio, seedPeriod.fine);
+    } catch (e) {}
 
     // Partite recenti & in programma
     const insertPartita = db.prepare(`
@@ -779,11 +806,28 @@ export function setupBBeater(db: DatabaseType, getUserFn?: (req: Request) => { u
       const economy = (userId ? db.prepare('SELECT * FROM economia WHERE user_id = ? LIMIT 1').get(userId) : null) as any ||
                       db.prepare('SELECT * FROM economia LIMIT 1').get() as any;
 
+      const { inizio: curInizio, fine: curFine, today: todayStr } = getBBeaterPeriod();
+
       // SOLO giocatori con owner <> 0 e dove owner E user_id = utente scelto
+      // Calcola i minuti giocati per ciascun giocatore dalla tabella minutigiocati
+      // per la settimana corrente rispettando il vincolo: data odierna >= inizio AND data odierna < fine
       const players = db.prepare(`
-        SELECT g.*, r.nationality, r.best_position, r.game_shape
+        SELECT g.*, 
+               r.nationality, 
+               r.best_position, 
+               r.game_shape,
+               COALESCE(m_cur.weekly_minutes, 0) as min
         FROM giocatori g
         LEFT JOIN roster r ON g.playerid = CAST(r.playerid AS TEXT) OR g.id = r.giocatore_id
+        LEFT JOIN (
+          SELECT playerid, SUM(COALESCE(minuti_giocati, 0)) as weekly_minutes
+          FROM minutigiocati
+          WHERE (
+            (inizio IS NOT NULL AND fine IS NOT NULL AND ? >= inizio AND ? < fine)
+            OR (inizio IS NOT NULL AND fine IS NOT NULL AND date('now') >= date(inizio) AND date('now') < date(fine))
+          )
+          GROUP BY playerid
+        ) m_cur ON CAST(g.playerid AS TEXT) = CAST(m_cur.playerid AS TEXT)
         WHERE (g.owner IS NOT NULL AND g.owner != 0 AND CAST(g.owner AS TEXT) != '0' AND TRIM(CAST(g.owner AS TEXT)) != '')
           AND (g.user_id = ? OR CAST(g.user_id AS TEXT) = ?)
           AND (
@@ -801,26 +845,137 @@ export function setupBBeater(db: DatabaseType, getUserFn?: (req: Request) => { u
             ELSE 6 
           END,
           g.salary DESC
-      `).all(userId, username, teamId, teamId, userId, username) as any[];
+      `).all(todayStr, todayStr, userId, username, teamId, teamId, userId, username) as any[];
 
       const activePlayerIds = new Set(players.map((p) => String(p.playerid)));
 
-      // Minuti: filtrati per i giocatori dell'utente scelto con owner <> 0
-      const allMinutes = db.prepare(`
-        SELECT m.*, g.name, g.pos, g.gs as game_shape, g.salary, g.dmi
+      // Minuti Giocati: aggregati per giocatore per la settimana corrente (data odierna >= inizio AND data odierna < fine)
+      const minutes = db.prepare(`
+        SELECT 
+          m.playerid,
+          MAX(m.id) as id,
+          MAX(m.match_id) as match_id,
+          m.user_id,
+          COALESCE(MAX(m.player_name), MAX(g.name), 'Giocatore #' || m.playerid) as player_name,
+          COALESCE(MAX(m.position), MAX(g.pos), '-') as position,
+          SUM(COALESCE(m.minuti_giocati, 0)) as minuti_giocati,
+          MAX(m.inizio) as inizio,
+          MAX(m.fine) as fine,
+          COUNT(m.id) as matches_count,
+          GROUP_CONCAT(COALESCE(m.match_id, '')) as match_ids,
+          MAX(g.name) as name, 
+          MAX(g.pos) as pos, 
+          COALESCE(MAX(g.gs), 7) as game_shape, 
+          MAX(g.salary) as salary, 
+          MAX(g.dmi) as dmi
         FROM minutigiocati m
-        JOIN giocatori g ON m.playerid = g.playerid
-        WHERE (g.owner IS NOT NULL AND g.owner != 0 AND CAST(g.owner AS TEXT) != '0')
-          AND (g.user_id = ? OR CAST(g.user_id AS TEXT) = ?)
+        LEFT JOIN giocatori g ON CAST(m.playerid AS TEXT) = CAST(g.playerid AS TEXT)
+        WHERE (
+            (m.inizio IS NOT NULL AND m.fine IS NOT NULL AND ? >= m.inizio AND ? < m.fine)
+            OR (m.inizio IS NOT NULL AND m.fine IS NOT NULL AND date('now') >= date(m.inizio) AND date('now') < date(m.fine))
+          )
           AND (
-            (? IS NOT NULL AND g.owner = ?)
+            m.user_id = ? 
+            OR CAST(m.user_id AS TEXT) = ?
+            OR (g.user_id = ? OR CAST(g.user_id AS TEXT) = ?)
+            OR (? IS NOT NULL AND g.owner = ?)
             OR g.owner = ?
             OR CAST(g.owner AS TEXT) = ?
           )
-        ORDER BY m.minuti_giocati DESC
-      `).all(userId, username, teamId, teamId, userId, username) as any[];
+        GROUP BY m.playerid
+        ORDER BY minuti_giocati DESC
+      `).all(todayStr, todayStr, userId, username, userId, username, teamId, teamId, userId, username) as any[];
 
-      const minutes = allMinutes.filter((m) => activePlayerIds.has(String(m.playerid)));
+      // Righe dettagliate con match_id per i singoli match della settimana (tabella minutigiocati)
+      const matchMinutes = db.prepare(`
+        SELECT 
+          m.*, 
+          COALESCE(m.player_name, g.name) as display_name, 
+          COALESCE(m.position, g.pos) as display_pos
+        FROM minutigiocati m
+        LEFT JOIN giocatori g ON CAST(m.playerid AS TEXT) = CAST(g.playerid AS TEXT)
+        WHERE (
+            (m.inizio IS NOT NULL AND m.fine IS NOT NULL AND ? >= m.inizio AND ? < m.fine)
+            OR (m.inizio IS NOT NULL AND m.fine IS NOT NULL AND date('now') >= date(m.inizio) AND date('now') < date(m.fine))
+          )
+          AND (
+            m.user_id = ? 
+            OR CAST(m.user_id AS TEXT) = ?
+            OR (g.user_id = ? OR CAST(g.user_id AS TEXT) = ?)
+            OR (? IS NOT NULL AND g.owner = ?)
+            OR g.owner = ?
+            OR CAST(g.owner AS TEXT) = ?
+          )
+        ORDER BY m.id DESC
+      `).all(todayStr, todayStr, userId, username, userId, username, teamId, teamId, userId, username) as any[];
+
+      // Matrice minuti giocati per giocatore suddivisi nelle 5 posizioni (PG, SG, SF, PF, C)
+      // per la settimana corrente (data odierna >= inizio AND data odierna < fine)
+      const weeklyPositionMinutes = db.prepare(`
+        WITH distinct_players AS (
+          SELECT DISTINCT CAST(playerid AS TEXT) as playerid
+          FROM giocatori
+          WHERE (owner IS NOT NULL AND owner != 0 AND CAST(owner AS TEXT) != '0' AND TRIM(CAST(owner AS TEXT)) != '')
+            AND (user_id = ? OR CAST(user_id AS TEXT) = ? OR owner = ? OR CAST(owner AS TEXT) = ?)
+          UNION
+          SELECT DISTINCT CAST(playerid AS TEXT) as playerid
+          FROM minutigiocati
+          WHERE (
+            (inizio IS NOT NULL AND fine IS NOT NULL AND ? >= inizio AND ? < fine)
+            OR (inizio IS NOT NULL AND fine IS NOT NULL AND date('now') >= date(inizio) AND date('now') < date(fine))
+          )
+          AND (user_id = ? OR CAST(user_id AS TEXT) = ?)
+        )
+        SELECT 
+          dp.playerid,
+          COALESCE(g.name, MAX(m.player_name), 'Giocatore #' || dp.playerid) as name,
+          COALESCE(g.pos, MAX(m.position), 'PG') as pos,
+          COALESCE(g.gs, 7) as game_shape,
+          COALESCE(g.age, 0) as age,
+          COALESCE(g.salary, 0) as salary,
+          COALESCE(SUM(CASE WHEN UPPER(TRIM(m.position)) = 'PG' THEN m.minuti_giocati ELSE 0 END), 0) as min_pg,
+          COALESCE(SUM(CASE WHEN UPPER(TRIM(m.position)) = 'SG' THEN m.minuti_giocati ELSE 0 END), 0) as min_sg,
+          COALESCE(SUM(CASE WHEN UPPER(TRIM(m.position)) = 'SF' THEN m.minuti_giocati ELSE 0 END), 0) as min_sf,
+          COALESCE(SUM(CASE WHEN UPPER(TRIM(m.position)) = 'PF' THEN m.minuti_giocati ELSE 0 END), 0) as min_pf,
+          COALESCE(SUM(CASE WHEN UPPER(TRIM(m.position)) = 'C' THEN m.minuti_giocati ELSE 0 END), 0) as min_c,
+          COALESCE(SUM(m.minuti_giocati), 0) as total_min,
+          COUNT(m.id) as matches_count
+        FROM distinct_players dp
+        LEFT JOIN giocatori g 
+          ON CAST(g.playerid AS TEXT) = dp.playerid
+          AND (g.owner IS NOT NULL AND g.owner != 0 AND CAST(g.owner AS TEXT) != '0')
+        LEFT JOIN minutigiocati m 
+          ON CAST(m.playerid AS TEXT) = dp.playerid
+          AND (
+            (m.inizio IS NOT NULL AND m.fine IS NOT NULL AND ? >= m.inizio AND ? < m.fine)
+            OR (m.inizio IS NOT NULL AND m.fine IS NOT NULL AND date('now') >= date(m.inizio) AND date('now') < date(m.fine))
+          )
+          AND (
+            m.user_id = ? 
+            OR CAST(m.user_id AS TEXT) = ? 
+            OR (g.user_id = ? OR CAST(g.user_id AS TEXT) = ?)
+            OR (? IS NOT NULL AND g.owner = ?)
+            OR g.owner = ?
+            OR CAST(g.owner AS TEXT) = ?
+          )
+        GROUP BY dp.playerid
+        ORDER BY 
+          CASE COALESCE(g.pos, MAX(m.position)) 
+            WHEN 'PG' THEN 1 
+            WHEN 'SG' THEN 2 
+            WHEN 'SF' THEN 3 
+            WHEN 'PF' THEN 4 
+            WHEN 'C' THEN 5 
+            ELSE 6 
+          END,
+          total_min DESC
+      `).all(
+        userId, username, teamId, teamId,
+        todayStr, todayStr,
+        userId, username,
+        todayStr, todayStr,
+        userId, username, userId, username, teamId, teamId, userId, username
+      ) as any[];
 
       // Partite
       const matches = db.prepare(`
@@ -876,9 +1031,16 @@ export function setupBBeater(db: DatabaseType, getUserFn?: (req: Request) => { u
         optimalShapePlayers,
         lastMatch,
         nextMatch,
+        currentPeriod: {
+          inizio: curInizio,
+          fine: curFine,
+          today: todayStr
+        },
         roster: players,
         matches,
         minutes,
+        matchMinutes,
+        weeklyPositionMinutes,
         stats
       });
     } catch (err: any) {
@@ -887,17 +1049,32 @@ export function setupBBeater(db: DatabaseType, getUserFn?: (req: Request) => { u
   });
 
   // Roster / Giocatori (SOLO owner <> 0 e dove owner E user_id = utente scelto)
+  // con minuti calcolati da minutigiocati per la data odierna (data odierna >= inizio AND data odierna < fine)
   router.get('/roster', (req: Request, res: Response) => {
     try {
       const currentUser = getCurrentUser(req);
       const userId = currentUser.id;
       const teamId = currentUser.teamid;
       const username = currentUser.user;
+      const { today: todayStr } = getBBeaterPeriod();
 
       const players = db.prepare(`
-        SELECT g.*, r.nationality, r.best_position, r.game_shape
+        SELECT g.*, 
+               r.nationality, 
+               r.best_position, 
+               r.game_shape,
+               COALESCE(m_cur.weekly_minutes, 0) as min
         FROM giocatori g
         LEFT JOIN roster r ON g.playerid = CAST(r.playerid AS TEXT) OR g.id = r.giocatore_id
+        LEFT JOIN (
+          SELECT playerid, SUM(COALESCE(minuti_giocati, 0)) as weekly_minutes
+          FROM minutigiocati
+          WHERE (
+            (inizio IS NOT NULL AND fine IS NOT NULL AND ? >= inizio AND ? < fine)
+            OR (inizio IS NOT NULL AND fine IS NOT NULL AND date('now') >= date(inizio) AND date('now') < date(fine))
+          )
+          GROUP BY playerid
+        ) m_cur ON CAST(g.playerid AS TEXT) = CAST(m_cur.playerid AS TEXT)
         WHERE (g.owner IS NOT NULL AND g.owner != 0 AND CAST(g.owner AS TEXT) != '0' AND TRIM(CAST(g.owner AS TEXT)) != '')
           AND (g.user_id = ? OR CAST(g.user_id AS TEXT) = ?)
           AND (
@@ -915,7 +1092,7 @@ export function setupBBeater(db: DatabaseType, getUserFn?: (req: Request) => { u
             ELSE 6 
           END,
           g.salary DESC
-      `).all(userId, username, teamId, teamId, userId, username) as any[];
+      `).all(todayStr, todayStr, userId, username, teamId, teamId, userId, username) as any[];
 
       res.json(players);
     } catch (err: any) {
@@ -923,161 +1100,382 @@ export function setupBBeater(db: DatabaseType, getUserFn?: (req: Request) => { u
     }
   });
 
-  // Aggiungi Giocatore
-  router.post('/roster', (req: Request, res: Response) => {
+  // 3 MIGLIORI QUINTETTI - Algoritmo Python Ottimizzato
+  router.get('/lineups', (req: Request, res: Response) => {
     try {
       const currentUser = getCurrentUser(req);
       const userId = currentUser.id;
-      const ownerVal = currentUser.teamid || currentUser.id || 102934;
+      const teamId = currentUser.teamid;
+      const username = currentUser.user;
 
-      const p = req.body;
-      const pid = p.playerid || `${Math.floor(1000000 + Math.random() * 9000000)}`;
-      const skill_out = (Number(p.js) || 1) + (Number(p.jr) || 1) + (Number(p.od) || 1) + (Number(p.ha) || 1) + (Number(p.dr) || 1) + (Number(p.pa) || 1);
-      const skill_int = (Number(p.ish) || 1) + (Number(p.ide) || 1) + (Number(p.rb) || 1) + (Number(p.sb) || 1);
-      const skill_tot = skill_out + skill_int + (Number(p.st) || 1) + (Number(p.ft) || 1);
+      // Calcola periodo (da venerdì a venerdì come in Python e come concordato)
+      const period = getBBeaterPeriod();
 
-      const insertG = db.prepare(`
-        INSERT INTO giocatori (
-          user_id, playerid, owner, name, pos, min, js, jr, od, ha, dr, pa, ish, ide, rb, sb, st, ft, ex, gs, age, height, potential, dmi, salary,
-          skill_tot, skill_int, skill_out, data_import
-        ) VALUES (
-          @user_id, @playerid, @owner, @name, @pos, @min, @js, @jr, @od, @ha, @dr, @pa, @ish, @ide, @rb, @sb, @st, @ft, @ex, @gs, @age, @height, @potential, @dmi, @salary,
-          @skill_tot, @skill_int, @skill_out, date('now')
-        )
-      `);
+      // Recupera tutti i giocatori attivi dell'utente (owner valido)
+      const rawPlayers = db.prepare(`
+        SELECT g.*, r.nationality, r.best_position, r.game_shape
+        FROM giocatori g
+        LEFT JOIN roster r ON g.playerid = CAST(r.playerid AS TEXT) OR g.id = r.giocatore_id
+        WHERE (g.owner IS NOT NULL AND g.owner != 0 AND CAST(g.owner AS TEXT) != '0' AND TRIM(CAST(g.owner AS TEXT)) != '')
+          AND (g.user_id = ? OR CAST(g.user_id AS TEXT) = ?)
+          AND (
+            (? IS NOT NULL AND g.owner = ?)
+            OR g.owner = ?
+            OR CAST(g.owner AS TEXT) = ?
+          )
+        ORDER BY g.id ASC
+      `).all(userId, username, teamId, teamId, userId, username) as any[];
 
-      const result = insertG.run({
-        user_id: userId,
-        playerid: pid,
-        owner: ownerVal,
-        name: p.name || 'Nuovo Giocatore',
-        pos: p.pos || 'PG',
-        min: Number(p.min) || 0,
-        js: Number(p.js) || 7,
-        jr: Number(p.jr) || 6,
-        od: Number(p.od) || 7,
-        ha: Number(p.ha) || 7,
-        dr: Number(p.dr) || 7,
-        pa: Number(p.pa) || 7,
-        ish: Number(p.ish) || 5,
-        ide: Number(p.ide) || 5,
-        rb: Number(p.rb) || 5,
-        sb: Number(p.sb) || 4,
-        st: Number(p.st) || 6,
-        ft: Number(p.ft) || 7,
-        ex: Number(p.ex) || 3,
-        gs: Number(p.gs) || 8,
-        age: Number(p.age) || 20,
-        height: p.height || '190 cm / 6\'3"',
-        potential: Number(p.potential) || 7,
-        dmi: Number(p.dmi) || 85000,
-        salary: Number(p.salary) || 8000,
-        skill_tot,
-        skill_int,
-        skill_out
-      });
+      // Funzione di calcolo rating posizione con fallback a formula community se 0
+      function getRating(p: any, pos: 'SF' | 'C' | 'PG' | 'PF' | 'SG'): number {
+        const col = pos.toLowerCase();
+        if (p[col] !== undefined && p[col] !== null && Number(p[col]) > 0) {
+          return Number(p[col]);
+        }
+        const js = Number(p.js) || 5;
+        const jr = Number(p.jr) || 5;
+        const od = Number(p.od) || 5;
+        const ha = Number(p.ha) || 5;
+        const dr = Number(p.dr) || 5;
+        const pa = Number(p.pa) || 5;
+        const ish = Number(p.ish) || 5;
+        const ide = Number(p.ide) || 5;
+        const rb = Number(p.rb) || 5;
+        const sb = Number(p.sb) || 5;
 
-      // Aggiungi anche a minutigiocati
-      db.prepare(`
-        INSERT INTO minutigiocati (user_id, playerid, player_name, position, minuti_giocati, inizio, fine)
-        VALUES (?, ?, ?, ?, ?, date('now', '-7 days'), date('now'))
-      `).run(userId, pid, p.name || 'Nuovo Giocatore', p.pos || 'PG', Number(p.min) || 0);
-
-      const created = db.prepare('SELECT * FROM giocatori WHERE id = ?').get(result.lastInsertRowid);
-      res.status(201).json(created);
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
-    }
-  });
-
-  // Aggiorna Giocatore
-  router.put('/roster/:id', (req: Request, res: Response) => {
-    try {
-      const id = parseInt(req.params.id, 10);
-      const p = req.body;
-
-      const skill_out = (Number(p.js) || 1) + (Number(p.jr) || 1) + (Number(p.od) || 1) + (Number(p.ha) || 1) + (Number(p.dr) || 1) + (Number(p.pa) || 1);
-      const skill_int = (Number(p.ish) || 1) + (Number(p.ide) || 1) + (Number(p.rb) || 1) + (Number(p.sb) || 1);
-      const skill_tot = skill_out + skill_int + (Number(p.st) || 1) + (Number(p.ft) || 1);
-
-      db.prepare(`
-        UPDATE giocatori SET
-          name = @name, pos = @pos, min = @min,
-          js = @js, jr = @jr, od = @od, ha = @ha, dr = @dr, pa = @pa,
-          ish = @ish, ide = @ide, rb = @rb, sb = @sb, st = @st, ft = @ft, ex = @ex, gs = @gs,
-          age = @age, height = @height, potential = @potential, dmi = @dmi, salary = @salary,
-          skill_tot = @skill_tot, skill_int = @skill_int, skill_out = @skill_out
-        WHERE id = @id
-      `).run({
-        id,
-        name: p.name,
-        pos: p.pos,
-        min: Number(p.min) || 0,
-        js: Number(p.js) || 1,
-        jr: Number(p.jr) || 1,
-        od: Number(p.od) || 1,
-        ha: Number(p.ha) || 1,
-        dr: Number(p.dr) || 1,
-        pa: Number(p.pa) || 1,
-        ish: Number(p.ish) || 1,
-        ide: Number(p.ide) || 1,
-        rb: Number(p.rb) || 1,
-        sb: Number(p.sb) || 1,
-        st: Number(p.st) || 1,
-        ft: Number(p.ft) || 1,
-        ex: Number(p.ex) || 1,
-        gs: Number(p.gs) || 1,
-        age: Number(p.age) || 20,
-        height: p.height,
-        potential: Number(p.potential) || 5,
-        dmi: Number(p.dmi) || 10000,
-        salary: Number(p.salary) || 3000,
-        skill_tot,
-        skill_int,
-        skill_out
-      });
-
-      const updated = db.prepare('SELECT * FROM giocatori WHERE id = ?').get(id);
-      res.json(updated);
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
-    }
-  });
-
-  // Elimina Giocatore
-  router.delete('/roster/:id', (req: Request, res: Response) => {
-    try {
-      const id = parseInt(req.params.id, 10);
-      const player = db.prepare('SELECT playerid FROM giocatori WHERE id = ?').get(id) as any;
-      if (player) {
-        db.prepare('DELETE FROM minutigiocati WHERE playerid = ?').run(player.playerid);
+        let val = 0;
+        if (pos === 'PG') val = 0.28 * pa + 0.25 * od + 0.18 * ha + 0.15 * dr + 0.14 * js;
+        else if (pos === 'SG') val = 0.28 * js + 0.24 * jr + 0.22 * od + 0.14 * dr + 0.12 * ha;
+        else if (pos === 'SF') val = 0.18 * js + 0.14 * jr + 0.16 * od + 0.14 * ide + 0.16 * ish + 0.12 * rb + 0.10 * pa;
+        else if (pos === 'PF') val = 0.26 * ish + 0.24 * ide + 0.24 * rb + 0.14 * sb + 0.12 * js;
+        else if (pos === 'C') val = 0.28 * rb + 0.28 * ide + 0.26 * ish + 0.18 * sb;
+        return Math.round(val * 100) / 100;
       }
-      db.prepare('DELETE FROM giocatori WHERE id = ?').run(id);
-      res.json({ ok: true });
+
+      const playersData = rawPlayers.map((p) => {
+        const pgVal = getRating(p, 'PG');
+        const sgVal = getRating(p, 'SG');
+        const sfVal = getRating(p, 'SF');
+        const pfVal = getRating(p, 'PF');
+        const cVal = getRating(p, 'C');
+        return {
+          playerid: String(p.playerid),
+          nome: p.name || 'Giocatore',
+          age: Number(p.age) || 20,
+          originalPos: p.pos || 'PG',
+          salary: Number(p.salary) || 0,
+          dmi: Number(p.dmi) || 0,
+          height: p.height || '',
+          potential: Number(p.potential) || 5,
+          PG: pgVal,
+          SG: sgVal,
+          SF: sfVal,
+          PF: pfVal,
+          C: cVal
+        };
+      });
+
+      const POSITIONS: ('SF' | 'C' | 'PG' | 'PF' | 'SG')[] = ['SF', 'C', 'PG', 'PF', 'SG'];
+
+      // Algoritmo di combinazione identico al Python:
+      // compute_best_lineup(players_data, excluded_players, top_n=10)
+      function computeLineup(pool: typeof playersData, excluded: Set<string>, topN = 10): {
+        lineup: { pos: 'SF' | 'C' | 'PG' | 'PF' | 'SG'; player: typeof playersData[0]; value: number }[] | null;
+        total: number;
+      } {
+        const remaining = pool.filter((p) => !excluded.has(p.playerid));
+        if (remaining.length < 5) {
+          return { lineup: null, total: 0 };
+        }
+
+        const filtered: Record<'SF' | 'C' | 'PG' | 'PF' | 'SG', typeof playersData> = {
+          SF: [...remaining].sort((a, b) => b.SF - a.SF).slice(0, topN),
+          C: [...remaining].sort((a, b) => b.C - a.C).slice(0, topN),
+          PG: [...remaining].sort((a, b) => b.PG - a.PG).slice(0, topN),
+          PF: [...remaining].sort((a, b) => b.PF - a.PF).slice(0, topN),
+          SG: [...remaining].sort((a, b) => b.SG - a.SG).slice(0, topN),
+        };
+
+        let bestCombo: { pos: 'SF' | 'C' | 'PG' | 'PF' | 'SG'; player: typeof playersData[0]; value: number }[] | null = null;
+        let maxTotal = -Infinity;
+
+        for (const sf of filtered.SF) {
+          for (const c of filtered.C) {
+            if (c.playerid === sf.playerid) continue;
+            for (const pg of filtered.PG) {
+              if (pg.playerid === sf.playerid || pg.playerid === c.playerid) continue;
+              for (const pf of filtered.PF) {
+                if (pf.playerid === sf.playerid || pf.playerid === c.playerid || pf.playerid === pg.playerid) continue;
+                for (const sg of filtered.SG) {
+                  if (
+                    sg.playerid === sf.playerid ||
+                    sg.playerid === c.playerid ||
+                    sg.playerid === pg.playerid ||
+                    sg.playerid === pf.playerid
+                  ) continue;
+
+                  const total = sf.SF + c.C + pg.PG + pf.PF + sg.SG;
+                  if (total > maxTotal) {
+                    maxTotal = total;
+                    bestCombo = [
+                      { pos: 'SF', player: sf, value: sf.SF },
+                      { pos: 'C', player: c, value: c.C },
+                      { pos: 'PG', player: pg, value: pg.PG },
+                      { pos: 'PF', player: pf, value: pf.PF },
+                      { pos: 'SG', player: sg, value: sg.SG },
+                    ];
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        return {
+          lineup: bestCombo,
+          total: maxTotal > -Infinity ? Math.round(maxTotal * 100) / 100 : 0
+        };
+      }
+
+      // 1. Miglior Quintetto
+      const excluded1 = new Set<string>();
+      const res1 = computeLineup(playersData, excluded1);
+
+      // 2. Secondo Miglior Quintetto
+      const excluded2 = new Set<string>(res1.lineup ? res1.lineup.map((x) => x.player.playerid) : []);
+      const res2 = computeLineup(playersData, excluded2);
+
+      // 3. Terzo Miglior Quintetto
+      const excluded3 = new Set<string>([
+        ...Array.from(excluded2),
+        ...(res2.lineup ? res2.lineup.map((x) => x.player.playerid) : [])
+      ]);
+      const res3 = computeLineup(playersData, excluded3);
+
+      // Giocatori da escludere (timetogo)
+      const allSelectedIds = new Set<string>([
+        ...Array.from(excluded3),
+        ...(res3.lineup ? res3.lineup.map((x) => x.player.playerid) : [])
+      ]);
+
+      const timetogo = playersData.filter((p) => !allSelectedIds.has(p.playerid));
+
+      const formatLineup = (
+        name: string,
+        item: { lineup: { pos: 'SF' | 'C' | 'PG' | 'PF' | 'SG'; player: typeof playersData[0]; value: number }[] | null; total: number }
+      ) => ({
+        name,
+        total: item.total,
+        players: (item.lineup || []).map((x) => ({
+          pos: x.pos,
+          playerid: x.player.playerid,
+          nome: x.player.nome,
+          age: x.player.age,
+          value: x.value,
+          originalPos: x.player.originalPos,
+          salary: x.player.salary,
+          dmi: x.player.dmi,
+          height: x.player.height,
+          potential: x.player.potential,
+          PG: x.player.PG,
+          SG: x.player.SG,
+          SF: x.player.SF,
+          PF: x.player.PF,
+          C: x.player.C,
+        }))
+      });
+
+      res.json({
+        period,
+        positions: POSITIONS,
+        totalPlayersAnalyzed: playersData.length,
+        bestLineup: formatLineup('Miglior Quintetto', res1),
+        secondBestLineup: formatLineup('Secondo Miglior Quintetto', res2),
+        thirdBestLineup: formatLineup('Terzo Miglior Quintetto', res3),
+        totalsSummary: {
+          first: res1.total,
+          second: res2.total,
+          third: res3.total,
+        },
+        timetogo: timetogo.map((p) => ({
+          pos: p.originalPos as any,
+          playerid: p.playerid,
+          nome: p.nome,
+          age: p.age,
+          value: Math.max(p.SF, p.C, p.PG, p.PF, p.SG),
+          originalPos: p.originalPos,
+          salary: p.salary,
+          dmi: p.dmi,
+          height: p.height,
+          potential: p.potential,
+          PG: p.PG,
+          SG: p.SG,
+          SF: p.SF,
+          PF: p.PF,
+          C: p.C,
+        }))
+      });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
+  });
+
+  // Inserimenti e modifiche manuali disabilitati: DB BuzzerBeater alimentato da automazioni esterne
+  router.post('/roster', (req: Request, res: Response) => {
+    res.status(403).json({ error: 'Operazione non consentita: il database di BuzzerBeater è alimentato da automazioni esterne (sola lettura).' });
+  });
+
+  router.put('/roster/:id', (req: Request, res: Response) => {
+    res.status(403).json({ error: 'Operazione non consentita: il database di BuzzerBeater è alimentato da automazioni esterne (sola lettura).' });
+  });
+
+  router.delete('/roster/:id', (req: Request, res: Response) => {
+    res.status(403).json({ error: 'Operazione non consentita: il database di BuzzerBeater è alimentato da automazioni esterne (sola lettura).' });
   });
 
   // Minuti Giocati & Forma (Training Minutes)
+  // Filtrati in base alla data odierna: data odierna >= inizio AND data odierna < fine
   router.get('/minutes', (req: Request, res: Response) => {
     try {
       const currentUser = getCurrentUser(req);
       const userId = currentUser.id;
       const teamId = currentUser.teamid;
+      const username = currentUser.user;
+      const { inizio: curInizio, fine: curFine, today: todayStr } = getBBeaterPeriod();
 
+      // Minuti aggregati per giocatore per la settimana corrente
       const minutes = db.prepare(`
-        SELECT m.*, g.name, g.pos, g.gs as game_shape, g.salary, g.dmi
+        SELECT 
+          m.playerid,
+          MAX(m.id) as id,
+          MAX(m.match_id) as match_id,
+          m.user_id,
+          COALESCE(MAX(m.player_name), MAX(g.name), 'Giocatore #' || m.playerid) as player_name,
+          COALESCE(MAX(m.position), MAX(g.pos), '-') as position,
+          SUM(COALESCE(m.minuti_giocati, 0)) as minuti_giocati,
+          MAX(m.inizio) as inizio,
+          MAX(m.fine) as fine,
+          COUNT(m.id) as matches_count,
+          GROUP_CONCAT(COALESCE(m.match_id, '')) as match_ids,
+          MAX(g.name) as name, 
+          MAX(g.pos) as pos, 
+          COALESCE(MAX(g.gs), 7) as game_shape, 
+          MAX(g.salary) as salary, 
+          MAX(g.dmi) as dmi
         FROM minutigiocati m
-        JOIN giocatori g ON m.playerid = g.playerid
-        WHERE (g.owner IS NOT NULL AND g.owner != 0 AND CAST(g.owner AS TEXT) != '0' AND TRIM(CAST(g.owner AS TEXT)) != '')
-          AND (
-            g.user_id = ? 
-            OR (? IS NOT NULL AND g.owner = ?)
-            OR (? IS NOT NULL AND g.owner = ?)
+        LEFT JOIN giocatori g ON CAST(m.playerid AS TEXT) = CAST(g.playerid AS TEXT)
+        WHERE (
+            (m.inizio IS NOT NULL AND m.fine IS NOT NULL AND ? >= m.inizio AND ? < m.fine)
+            OR (m.inizio IS NOT NULL AND m.fine IS NOT NULL AND date('now') >= date(m.inizio) AND date('now') < date(m.fine))
           )
-        ORDER BY m.minuti_giocati DESC
-      `).all(userId, teamId, teamId, userId, userId) as any[];
+          AND (
+            m.user_id = ? 
+            OR CAST(m.user_id AS TEXT) = ?
+            OR (g.user_id = ? OR CAST(g.user_id AS TEXT) = ?)
+            OR (? IS NOT NULL AND g.owner = ?)
+            OR g.owner = ?
+            OR CAST(g.owner AS TEXT) = ?
+          )
+        GROUP BY m.playerid
+        ORDER BY minuti_giocati DESC
+      `).all(todayStr, todayStr, userId, username, userId, username, teamId, teamId, userId, username) as any[];
+
+      // Se richiesto formato con dettagli/metadati
+      if (req.query.details === 'true') {
+        const rawMatches = db.prepare(`
+          SELECT m.*, 
+                 COALESCE(m.player_name, g.name) as display_name, 
+                 COALESCE(m.position, g.pos) as display_pos
+          FROM minutigiocati m
+          LEFT JOIN giocatori g ON CAST(m.playerid AS TEXT) = CAST(g.playerid AS TEXT)
+          WHERE (
+              (m.inizio IS NOT NULL AND m.fine IS NOT NULL AND ? >= m.inizio AND ? < m.fine)
+              OR (m.inizio IS NOT NULL AND m.fine IS NOT NULL AND date('now') >= date(m.inizio) AND date('now') < date(m.fine))
+            )
+            AND (
+              m.user_id = ? 
+              OR CAST(m.user_id AS TEXT) = ?
+              OR (g.user_id = ? OR CAST(g.user_id AS TEXT) = ?)
+              OR (? IS NOT NULL AND g.owner = ?)
+              OR g.owner = ?
+              OR CAST(g.owner AS TEXT) = ?
+            )
+          ORDER BY m.id DESC
+        `).all(todayStr, todayStr, userId, username, userId, username, teamId, teamId, userId, username) as any[];
+
+        const weeklyPositionMinutes = db.prepare(`
+          WITH distinct_players AS (
+            SELECT DISTINCT CAST(playerid AS TEXT) as playerid
+            FROM giocatori
+            WHERE (owner IS NOT NULL AND owner != 0 AND CAST(owner AS TEXT) != '0' AND TRIM(CAST(owner AS TEXT)) != '')
+              AND (user_id = ? OR CAST(user_id AS TEXT) = ? OR owner = ? OR CAST(owner AS TEXT) = ?)
+            UNION
+            SELECT DISTINCT CAST(playerid AS TEXT) as playerid
+            FROM minutigiocati
+            WHERE (
+              (inizio IS NOT NULL AND fine IS NOT NULL AND ? >= inizio AND ? < fine)
+              OR (inizio IS NOT NULL AND fine IS NOT NULL AND date('now') >= date(inizio) AND date('now') < date(fine))
+            )
+            AND (user_id = ? OR CAST(user_id AS TEXT) = ?)
+          )
+          SELECT 
+            dp.playerid,
+            COALESCE(g.name, MAX(m.player_name), 'Giocatore #' || dp.playerid) as name,
+            COALESCE(g.pos, MAX(m.position), 'PG') as pos,
+            COALESCE(g.gs, 7) as game_shape,
+            COALESCE(g.age, 0) as age,
+            COALESCE(g.salary, 0) as salary,
+            COALESCE(SUM(CASE WHEN UPPER(TRIM(m.position)) = 'PG' THEN m.minuti_giocati ELSE 0 END), 0) as min_pg,
+            COALESCE(SUM(CASE WHEN UPPER(TRIM(m.position)) = 'SG' THEN m.minuti_giocati ELSE 0 END), 0) as min_sg,
+            COALESCE(SUM(CASE WHEN UPPER(TRIM(m.position)) = 'SF' THEN m.minuti_giocati ELSE 0 END), 0) as min_sf,
+            COALESCE(SUM(CASE WHEN UPPER(TRIM(m.position)) = 'PF' THEN m.minuti_giocati ELSE 0 END), 0) as min_pf,
+            COALESCE(SUM(CASE WHEN UPPER(TRIM(m.position)) = 'C' THEN m.minuti_giocati ELSE 0 END), 0) as min_c,
+            COALESCE(SUM(m.minuti_giocati), 0) as total_min,
+            COUNT(m.id) as matches_count
+          FROM distinct_players dp
+          LEFT JOIN giocatori g 
+            ON CAST(g.playerid AS TEXT) = dp.playerid
+            AND (g.owner IS NOT NULL AND g.owner != 0 AND CAST(g.owner AS TEXT) != '0')
+          LEFT JOIN minutigiocati m 
+            ON CAST(m.playerid AS TEXT) = dp.playerid
+            AND (
+              (m.inizio IS NOT NULL AND m.fine IS NOT NULL AND ? >= m.inizio AND ? < m.fine)
+              OR (m.inizio IS NOT NULL AND m.fine IS NOT NULL AND date('now') >= date(m.inizio) AND date('now') < date(m.fine))
+            )
+            AND (
+              m.user_id = ? 
+              OR CAST(m.user_id AS TEXT) = ? 
+              OR (g.user_id = ? OR CAST(g.user_id AS TEXT) = ?)
+              OR (? IS NOT NULL AND g.owner = ?)
+              OR g.owner = ?
+              OR CAST(g.owner AS TEXT) = ?
+            )
+          GROUP BY dp.playerid
+          ORDER BY 
+            CASE COALESCE(g.pos, MAX(m.position)) 
+              WHEN 'PG' THEN 1 
+              WHEN 'SG' THEN 2 
+              WHEN 'SF' THEN 3 
+              WHEN 'PF' THEN 4 
+              WHEN 'C' THEN 5 
+              ELSE 6 
+            END,
+            total_min DESC
+        `).all(
+          userId, username, teamId, teamId,
+          todayStr, todayStr,
+          userId, username,
+          todayStr, todayStr,
+          userId, username, userId, username, teamId, teamId, userId, username
+        ) as any[];
+
+        return res.json({
+          period: { inizio: curInizio, fine: curFine, today: todayStr },
+          minutes,
+          matchMinutes: rawMatches,
+          weeklyPositionMinutes
+        });
+      }
 
       res.json(minutes);
     } catch (err: any) {
@@ -1086,27 +1484,7 @@ export function setupBBeater(db: DatabaseType, getUserFn?: (req: Request) => { u
   });
 
   router.post('/minutes', (req: Request, res: Response) => {
-    try {
-      const currentUser = getCurrentUser(req);
-      const userId = currentUser.id;
-      const { playerid, minuti_giocati, player_name, position } = req.body;
-      const existing = db.prepare('SELECT id FROM minutigiocati WHERE playerid = ?').get(playerid) as any;
-      if (existing) {
-        db.prepare('UPDATE minutigiocati SET minuti_giocati = ? WHERE id = ?').run(Number(minuti_giocati) || 0, existing.id);
-      } else {
-        db.prepare(`
-          INSERT INTO minutigiocati (user_id, playerid, player_name, position, minuti_giocati, inizio, fine)
-          VALUES (?, ?, ?, ?, ?, date('now', '-7 days'), date('now'))
-        `).run(userId, playerid, player_name || '', position || 'PG', Number(minuti_giocati) || 0);
-      }
-
-      // Aggiorna anche su giocatori
-      db.prepare('UPDATE giocatori SET min = ? WHERE playerid = ?').run(Number(minuti_giocati) || 0, playerid);
-
-      res.json({ ok: true });
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
-    }
+    res.status(403).json({ error: 'Operazione non consentita: il database di BuzzerBeater è alimentato da automazioni esterne (sola lettura).' });
   });
 
   // Partite (Matches)
@@ -1129,44 +1507,7 @@ export function setupBBeater(db: DatabaseType, getUserFn?: (req: Request) => { u
   });
 
   router.post('/matches', (req: Request, res: Response) => {
-    try {
-      const currentUser = getCurrentUser(req);
-      const userId = currentUser.id;
-      const m = req.body;
-      const matchid = m.matchid || Math.floor(100000 + Math.random() * 900000);
-      const totalAtt = (Number(m.bleachers) || 0) + (Number(m.lower_tier) || 0) + (Number(m.courtside) || 0) + (Number(m.luxury) || 0);
-
-      const stmt = db.prepare(`
-        INSERT INTO partite (
-          user_id, matchid, stagione, teamAway, risAway, risHome, teamHome, date, type, retrieve, inizio, fine,
-          bleachers, lower_tier, courtside, luxury, total_attendance
-        ) VALUES (
-          @user_id, @matchid, @stagione, @teamAway, @risAway, @risHome, @teamHome, @date, @type, date('now'), date('now'), date('now'),
-          @bleachers, @lower_tier, @courtside, @luxury, @total_attendance
-        )
-      `);
-
-      stmt.run({
-        user_id: userId,
-        matchid,
-        stagione: Number(m.stagione) || 62,
-        teamAway: m.teamAway,
-        risAway: Number(m.risAway) || 0,
-        risHome: Number(m.risHome) || 0,
-        teamHome: m.teamHome,
-        date: m.date || new Date().toISOString().split('T')[0],
-        type: m.type || 'Campionato',
-        bleachers: Number(m.bleachers) || 0,
-        lower_tier: Number(m.lower_tier) || 0,
-        courtside: Number(m.courtside) || 0,
-        luxury: Number(m.luxury) || 0,
-        total_attendance: totalAtt
-      });
-
-      res.status(201).json({ ok: true });
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
-    }
+    res.status(403).json({ error: 'Operazione non consentita: il database di BuzzerBeater è alimentato da automazioni esterne (sola lettura).' });
   });
 
   // Arena Palazzetto

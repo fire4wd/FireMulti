@@ -234,37 +234,14 @@ export const HtPlayerDetailModal: React.FC<HtPlayerDetailModalProps> = ({
 
         {/* Modal Footer */}
         <div className="flex items-center justify-between p-4 border-t border-zinc-800 bg-zinc-950">
-          <div className="flex items-center gap-2">
-            {isAdmin && (
-              <button
-                onClick={() => {
-                  if (confirm(`Sei sicuro di voler eliminare ${player.FirstName} ${player.LastName}?`)) {
-                    onDelete(player.PlayerID);
-                    onClose();
-                  }
-                }}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-red-950/60 hover:bg-red-900 border border-red-800 text-red-300 text-xs font-mono transition-colors"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Elimina</span>
-              </button>
-            )}
+          <div className="flex items-center gap-2 text-zinc-500 text-xs font-mono">
+            <span>🔒 Scheda tecnica sincronizzata con automazioni (Sola lettura)</span>
           </div>
 
           <div className="flex items-center gap-2">
             <button
-              onClick={() => {
-                onClose();
-                onEdit(player);
-              }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-mono font-bold shadow-md shadow-emerald-950/40 transition-colors"
-            >
-              <Edit2 className="w-3.5 h-3.5" />
-              <span>Modifica Giocatore</span>
-            </button>
-            <button
               onClick={onClose}
-              className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-mono transition-colors"
+              className="px-4 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-mono transition-colors font-semibold"
             >
               Chiudi
             </button>

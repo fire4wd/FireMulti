@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Users,
   Trophy,
-  Plus,
+  Lock,
+  Eye,
   Search,
   Filter,
   RefreshCw,
@@ -241,29 +242,17 @@ export const HattrickDashboard: React.FC<HattrickDashboardProps> = ({
 
           {/* Module Action Buttons */}
           <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={handleSeedDemo}
-              className="px-3 py-1.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 text-xs font-mono transition-colors"
-              title="Carica rosa demo Hattrick"
-            >
-              Seed Rosa Demo
-            </button>
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-400 text-xs font-mono">
+              <Lock className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Automazioni attive (Sola lettura)</span>
+            </div>
             <button
               onClick={loadHattrickData}
-              className="p-2 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-white transition-colors"
-              title="Aggiorna Dati Hattrick"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white text-xs font-mono transition-colors"
+              title="Aggiorna Dati Hattrick dal database"
             >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-emerald-400' : ''}`} />
-            </button>
-            <button
-              onClick={() => {
-                setEditingPlayer(null);
-                setIsPlayerModalOpen(true);
-              }}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-xs font-bold shadow-md shadow-emerald-950/40 transition-all active:scale-95"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Nuovo Giocatore</span>
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-emerald-400' : ''}`} />
+              <span>Sincronizza</span>
             </button>
           </div>
         </div>
@@ -462,14 +451,8 @@ export const HattrickDashboard: React.FC<HattrickDashboardProps> = ({
               <Users className="w-10 h-10 text-zinc-600 mx-auto mb-3" />
               <h3 className="font-bold text-white text-base">Nessun giocatore trovato</h3>
               <p className="text-xs text-zinc-400 font-mono mt-1">
-                Nessun giocatore corrisponde ai filtri selezionati.
+                Nessun giocatore corrisponde ai filtri selezionati, oppure il database è in attesa del primo popolamento automatico.
               </p>
-              <button
-                onClick={handleSeedDemo}
-                className="mt-4 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-xs font-bold shadow"
-              >
-                Carica Rosa Demo
-              </button>
             </div>
           ) : viewMode === 'table' ? (
             /* Tabular View with All Hattrick Skills */
@@ -577,14 +560,11 @@ export const HattrickDashboard: React.FC<HattrickDashboardProps> = ({
                           </td>
                           <td className="py-2.5 px-3 text-right" onClick={(e) => e.stopPropagation()}>
                             <button
-                              onClick={() => {
-                                setEditingPlayer(p);
-                                setIsPlayerModalOpen(true);
-                              }}
-                              className="p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-white"
-                              title="Modifica"
+                              onClick={() => setSelectedPlayerForDetail(p)}
+                              className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 hover:text-emerald-400 transition-colors"
+                              title="Visualizza Scheda"
                             >
-                              ✏️
+                              <Eye className="w-3.5 h-3.5" />
                             </button>
                           </td>
                         </tr>

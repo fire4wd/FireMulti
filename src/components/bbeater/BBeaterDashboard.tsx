@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Trophy,
   Users,
@@ -6,9 +6,6 @@ import {
   Building2,
   DollarSign,
   BarChart3,
-  Plus,
-  Edit2,
-  Trash2,
   Search,
   CheckCircle2,
   AlertTriangle,
@@ -23,7 +20,10 @@ import {
   Award,
   User,
   UserCheck,
-  ChevronDown
+  ChevronDown,
+  Dribbble,
+  Lock,
+  Eye
 } from 'lucide-react';
 import {
   BBPlayer,
@@ -31,6 +31,7 @@ import {
   BBEconomy,
   BBMatch,
   BBMinute,
+  BBWeeklyPositionMinutes,
   BBPlayerStat,
   BBDashboardData,
   BBUser,
@@ -43,6 +44,7 @@ import {
   getSkillColor,
   getGameShapeStatus,
 } from './BBConstants';
+import { BBLineupsView } from './BBLineupsView';
 import { BBPlayerModal } from './BBPlayerModal';
 import { BBMatchModal } from './BBMatchModal';
 import { BBMinutesModal } from './BBMinutesModal';
@@ -56,10 +58,12 @@ export const BBeaterDashboard: React.FC<BBeaterDashboardProps> = ({
   isAdmin = true,
   onRefreshSystemStatus,
 }) => {
-  const [subTab, setSubTab] = useState<'roster' | 'minutes' | 'matches' | 'arena' | 'economy' | 'stats'>('roster');
+  const [subTab, setSubTab] = useState<'lineups' | 'roster' | 'minutes' | 'matches' | 'arena' | 'economy' | 'stats'>('lineups');
   const [rosterViewMode, setRosterViewMode] = useState<'table' | 'cards'>('table');
   const [positionFilter, setPositionFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [matrixFilter, setMatrixFilter] = useState<'ALL' | 'PLAYED' | 'OPTIMAL' | 'LOW' | 'HIGH'>('ALL');
+  const [matrixSearch, setMatrixSearch] = useState<string>('');
 
   // Scelta Utente (tabella utenti campo user)
   const [usersList, setUsersList] = useState<BBUser[]>([]);
@@ -239,6 +243,103 @@ export const BBeaterDashboard: React.FC<BBeaterDashboardProps> = ({
   const minutesList = dashboardData?.minutes || [];
   const statsList = dashboardData?.stats || [];
 
+  // Calcolo matrice minuti per le 5 posizioni (PG, SG, SF, PF, C) per la settimana corrente
+  const weeklyMatrixRows: BBWeeklyPositionMinutes[] = useMemo(() => {
+    if (dashboardData?.weeklyPositionMinutes && dashboardData.weeklyPositionMinutes.length > 0) {
+      return dashboardData.weeklyPositionMinutes;
+    }
+
+    // Fallback di calcolo se non già pre-aggregato dal backend
+    const map = new Map<string, BBWeeklyPositionMinutes>();
+    players.forEach((p) => {
+      const pid = String(p.playerid);
+      map.set(pid, {
+        playerid: pid,
+        name: p.name,
+        pos: p.pos,
+        game_shape: p.gs || p.game_shape || 7,
+        age: p.age,
+        salary: p.salary,
+        min_pg: 0,
+        min_sg: 0,
+        min_sf: 0,
+        min_pf: 0,
+        min_c: 0,
+        total_min: 0,
+        matches_count: 0,
+      });
+    });
+
+    (dashboardData?.matchMinutes || []).forEach((m) => {
+      const pid = String(m.playerid);
+      let entry = map.get(pid);
+      if (!entry) {
+        entry = {
+          playerid: pid,
+          name: m.player_name || `Giocatore #${pid}`,
+          pos: m.position || 'PG',
+          game_shape: 7,
+          age: 0,
+          salary: 0,
+          min_pg: 0,
+          min_sg: 0,
+          min_sf: 0,
+          min_pf: 0,
+          min_c: 0,
+          total_min: 0,
+          matches_count: 0,
+        };
+        map.set(pid, entry);
+      }
+      const mins = Number(m.minuti_giocati) || 0;
+      const role = (m.position || '').trim().toUpperCase();
+      if (role === 'PG') entry.min_pg += mins;
+      else if (role === 'SG') entry.min_sg += mins;
+      else if (role === 'SF') entry.min_sf += mins;
+      else if (role === 'PF') entry.min_pf += mins;
+      else if (role === 'C') entry.min_c += mins;
+      entry.total_min += mins;
+      entry.matches_count = (entry.matches_count || 0) + 1;
+    });
+
+    return Array.from(map.values()).sort((a, b) => {
+      const roleOrder: Record<string, number> = { PG: 1, SG: 2, SF: 3, PF: 4, C: 5 };
+      const orderA = roleOrder[a.pos] || 6;
+      const orderB = roleOrder[b.pos] || 6;
+      if (orderA !== orderB) return orderA - orderB;
+      return b.total_min - a.total_min;
+    });
+  }, [dashboardData?.weeklyPositionMinutes, dashboardData?.matchMinutes, players]);
+
+  const filteredMatrixRows = useMemo(() => {
+    return weeklyMatrixRows.filter((r) => {
+      if (matrixSearch.trim()) {
+        const q = matrixSearch.toLowerCase();
+        const match = r.name.toLowerCase().includes(q) || r.playerid.includes(q) || r.pos.toLowerCase().includes(q);
+        if (!match) return false;
+      }
+      if (matrixFilter === 'PLAYED') return r.total_min > 0;
+      if (matrixFilter === 'OPTIMAL') return r.total_min >= 48 && r.total_min <= 75;
+      if (matrixFilter === 'LOW') return r.total_min < 48;
+      if (matrixFilter === 'HIGH') return r.total_min > 75;
+      return true;
+    });
+  }, [weeklyMatrixRows, matrixSearch, matrixFilter]);
+
+  const teamTotals = useMemo(() => {
+    return weeklyMatrixRows.reduce(
+      (acc, r) => ({
+        pg: acc.pg + (r.min_pg || 0),
+        sg: acc.sg + (r.min_sg || 0),
+        sf: acc.sf + (r.min_sf || 0),
+        pf: acc.pf + (r.min_pf || 0),
+        c: acc.c + (r.min_c || 0),
+        total: acc.total + (r.total_min || 0),
+      }),
+      { pg: 0, sg: 0, sf: 0, pf: 0, c: 0, total: 0 }
+    );
+  }, [weeklyMatrixRows]);
+
   // Calcolo totale stipendi roster
   const totalSalaries = players.reduce((sum, p) => sum + (p.salary || 0), 0);
 
@@ -371,6 +472,21 @@ export const BBeaterDashboard: React.FC<BBeaterDashboardProps> = ({
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800/80 pb-3">
         <div className="flex flex-wrap items-center gap-1.5 p-1 bg-zinc-900 border border-zinc-800 rounded-xl font-mono text-xs">
           <button
+            onClick={() => setSubTab('lineups')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg transition-colors ${
+              subTab === 'lineups'
+                ? 'bg-orange-600 text-white font-bold shadow-sm'
+                : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+            }`}
+          >
+            <Dribbble className="w-3.5 h-3.5 text-orange-400" />
+            <span>3 Migliori Quintetti</span>
+            <span className="px-1.5 py-0.2 rounded text-[10px] bg-orange-950 text-orange-300 border border-orange-500/30">
+              TOP
+            </span>
+          </button>
+
+          <button
             onClick={() => setSubTab('roster')}
             className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg transition-colors ${
               subTab === 'roster'
@@ -444,6 +560,11 @@ export const BBeaterDashboard: React.FC<BBeaterDashboardProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
+          <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-400 text-xs font-mono">
+            <Lock className="w-3.5 h-3.5 text-orange-400" />
+            <span>Automazioni BB (Sola Lettura)</span>
+          </div>
+
           <button
             onClick={fetchData}
             title="Ricarica dati"
@@ -451,29 +572,6 @@ export const BBeaterDashboard: React.FC<BBeaterDashboardProps> = ({
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
-
-          {subTab === 'roster' && (
-            <button
-              onClick={() => {
-                setSelectedPlayer(null);
-                setPlayerModalOpen(true);
-              }}
-              className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-mono font-semibold text-xs shadow-md shadow-red-950/40 transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Nuovo Giocatore</span>
-            </button>
-          )}
-
-          {subTab === 'matches' && (
-            <button
-              onClick={() => setMatchModalOpen(true)}
-              className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-mono font-semibold text-xs shadow-md shadow-red-950/40 transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Registra Partita</span>
-            </button>
-          )}
         </div>
       </div>
 
@@ -486,6 +584,11 @@ export const BBeaterDashboard: React.FC<BBeaterDashboardProps> = ({
       )}
 
       {/* 3. TAB CONTENT */}
+
+      {/* TAB: 3 MIGLIORI QUINTETTI */}
+      {subTab === 'lineups' && (
+        <BBLineupsView selectedUser={selectedUser} />
+      )}
 
       {/* TAB: ROSTER & SKILLS */}
       {subTab === 'roster' && (
@@ -660,23 +763,16 @@ export const BBeaterDashboard: React.FC<BBeaterDashboardProps> = ({
                             </td>
 
                             <td className="py-2.5 px-3 text-right">
-                              <div className="flex items-center justify-end gap-1">
+                              <div className="flex items-center justify-end">
                                 <button
                                   onClick={() => {
                                     setSelectedPlayer(player);
                                     setPlayerModalOpen(true);
                                   }}
-                                  className="p-1 rounded-lg bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 transition-colors"
-                                  title="Modifica scheda e skill"
+                                  className="p-1.5 rounded-lg bg-zinc-800 text-zinc-400 hover:text-orange-400 hover:bg-zinc-700 transition-colors"
+                                  title="Visualizza scheda e skill atleta"
                                 >
-                                  <Edit2 className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  onClick={() => handleDeletePlayer(player.id, player.name)}
-                                  className="p-1 rounded-lg bg-zinc-800 text-red-400 hover:text-red-300 hover:bg-red-950/50 transition-colors"
-                                  title="Svincola o elimina"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <Eye className="w-3.5 h-3.5" />
                                 </button>
                               </div>
                             </td>
@@ -826,16 +922,10 @@ export const BBeaterDashboard: React.FC<BBeaterDashboardProps> = ({
 
                     {/* Card Actions */}
                     <div className="pt-3 border-t border-zinc-800 flex items-center justify-between text-xs font-mono">
-                      <button
-                        onClick={() => {
-                          setSelectedMinutePlayer(player);
-                          setMinutesModalOpen(true);
-                        }}
-                        className="text-zinc-400 hover:text-white flex items-center gap-1.5 transition-colors"
-                      >
-                        <Clock className="w-3.5 h-3.5" />
-                        <span>Gestisci Minuti</span>
-                      </button>
+                      <div className="text-zinc-400 flex items-center gap-1.5 text-xs font-mono">
+                        <Clock className="w-3.5 h-3.5 text-orange-400" />
+                        <span>{player.min || 0} min giocati</span>
+                      </div>
 
                       <div className="flex items-center gap-1">
                         <button
@@ -843,15 +933,11 @@ export const BBeaterDashboard: React.FC<BBeaterDashboardProps> = ({
                             setSelectedPlayer(player);
                             setPlayerModalOpen(true);
                           }}
-                          className="p-1.5 rounded-lg bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 transition-colors"
+                          className="p-1.5 rounded-lg bg-zinc-800 text-zinc-400 hover:text-orange-400 hover:bg-zinc-700 transition-colors flex items-center gap-1 text-xs font-mono"
+                          title="Visualizza scheda"
                         >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDeletePlayer(player.id, player.name)}
-                          className="p-1.5 rounded-lg bg-zinc-800 text-red-400 hover:text-red-300 hover:bg-red-950/50 transition-colors"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>Scheda</span>
                         </button>
                       </div>
                     </div>
@@ -866,6 +952,32 @@ export const BBeaterDashboard: React.FC<BBeaterDashboardProps> = ({
       {/* TAB: MINUTI & FORMA */}
       {subTab === 'minutes' && (
         <div className="space-y-6">
+          {/* Periodo di Riferimento Settimanale & Filtro Date */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-indigo-950/60 border border-indigo-500/30 text-indigo-400">
+                <Calendar className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="text-sm font-bold text-white">Settimana BuzzerBeater (Training Window)</h4>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-950 text-emerald-400 border border-emerald-800/60">
+                    Filtro Attivo
+                  </span>
+                </div>
+                <p className="text-xs text-zinc-400 font-mono mt-1">
+                  Inizio: <strong className="text-zinc-200">{dashboardData?.currentPeriod?.inizio || '...'}</strong> &bull; 
+                  Fine: <strong className="text-zinc-200">{dashboardData?.currentPeriod?.fine || '...'}</strong> &bull; 
+                  Data Odierna: <strong className="text-amber-400">{dashboardData?.currentPeriod?.today || new Date().toISOString().split('T')[0]}</strong>
+                </p>
+              </div>
+            </div>
+            <div className="px-3.5 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-[11px] font-mono text-zinc-400 flex items-center gap-2">
+              <span className="text-zinc-500">Regola:</span>
+              <code className="text-indigo-300 font-semibold">data_odierna &gt;= datainizio &lt; datafine</code>
+            </div>
+          </div>
+
           {/* Bento Rule Explanation */}
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 shadow-lg space-y-3">
             <div className="flex items-center gap-3">
@@ -973,19 +1085,310 @@ export const BBeaterDashboard: React.FC<BBeaterDashboardProps> = ({
                       <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${status.badgeClass}`}>
                         {status.label}
                       </span>
-                      <button
-                        onClick={() => {
-                          setSelectedMinutePlayer(player);
-                          setMinutesModalOpen(true);
-                        }}
-                        className="px-2 py-1 rounded-lg bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 text-xs transition-colors"
-                      >
-                        Aggiorna
-                      </button>
                     </div>
                   </div>
                 );
               })}
+            </div>
+          </div>
+
+          {/* Tabella Riassuntiva Minuti per Posizione (Richiesta Utente) */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 shadow-lg space-y-4">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-zinc-800 pb-4">
+              <div>
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <h4 className="text-sm font-bold text-white tracking-wide flex items-center gap-2">
+                    <span>Tabella Riassuntiva: Minuti per Posizione</span>
+                  </h4>
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] bg-indigo-950/80 text-indigo-300 border border-indigo-700/50 font-mono font-semibold">
+                    {dashboardData?.currentPeriod?.inizio || 'Inizio'} &rarr; {dashboardData?.currentPeriod?.fine || 'Fine'}
+                  </span>
+                  <span className="px-2 py-0.5 rounded text-[10px] bg-zinc-800 text-zinc-400 font-mono">
+                    {weeklyMatrixRows.length} giocatori
+                  </span>
+                </div>
+                <p className="text-xs text-zinc-400 mt-1 font-sans">
+                  Minuti giocati nel rispettivo ruolo (PG, SG, SF, PF, C) nella settimana attiva (<code className="text-zinc-300 font-mono text-[11px]">data &gt;= inizio AND data &lt; fine</code>).
+                </p>
+              </div>
+
+              {/* Filtri e Ricerca */}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+                  <input
+                    type="text"
+                    placeholder="Cerca giocatore o ruolo..."
+                    value={matrixSearch}
+                    onChange={(e) => setMatrixSearch(e.target.value)}
+                    className="pl-8 pr-3 py-1.5 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500 w-44 font-mono"
+                  />
+                </div>
+
+                <div className="flex items-center bg-zinc-950 p-1 rounded-xl border border-zinc-800 text-[11px] font-mono">
+                  <button
+                    onClick={() => setMatrixFilter('ALL')}
+                    className={`px-2.5 py-1 rounded-lg transition-colors ${matrixFilter === 'ALL' ? 'bg-zinc-800 text-white font-bold' : 'text-zinc-400 hover:text-zinc-200'}`}
+                  >
+                    Tutti ({weeklyMatrixRows.length})
+                  </button>
+                  <button
+                    onClick={() => setMatrixFilter('PLAYED')}
+                    className={`px-2.5 py-1 rounded-lg transition-colors ${matrixFilter === 'PLAYED' ? 'bg-zinc-800 text-indigo-300 font-bold' : 'text-zinc-400 hover:text-zinc-200'}`}
+                  >
+                    In campo ({weeklyMatrixRows.filter(r => r.total_min > 0).length})
+                  </button>
+                  <button
+                    onClick={() => setMatrixFilter('OPTIMAL')}
+                    className={`px-2.5 py-1 rounded-lg transition-colors ${matrixFilter === 'OPTIMAL' ? 'bg-emerald-950 text-emerald-300 font-bold' : 'text-zinc-400 hover:text-zinc-200'}`}
+                  >
+                    48-75m ({weeklyMatrixRows.filter(r => r.total_min >= 48 && r.total_min <= 75).length})
+                  </button>
+                  <button
+                    onClick={() => setMatrixFilter('LOW')}
+                    className={`px-2.5 py-1 rounded-lg transition-colors ${matrixFilter === 'LOW' ? 'bg-amber-950 text-amber-300 font-bold' : 'text-zinc-400 hover:text-zinc-200'}`}
+                  >
+                    &lt;48m ({weeklyMatrixRows.filter(r => r.total_min < 48).length})
+                  </button>
+                  <button
+                    onClick={() => setMatrixFilter('HIGH')}
+                    className={`px-2.5 py-1 rounded-lg transition-colors ${matrixFilter === 'HIGH' ? 'bg-rose-950 text-rose-300 font-bold' : 'text-zinc-400 hover:text-zinc-200'}`}
+                  >
+                    &gt;75m ({weeklyMatrixRows.filter(r => r.total_min > 75).length})
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Tabella Matrice Ruoli */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left font-mono text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-zinc-800 text-zinc-400 text-[11px] uppercase bg-zinc-950/60">
+                    <th className="py-3 px-3 min-w-[220px]">Giocatore (Roster)</th>
+                    <th className="py-3 px-2 text-center text-blue-400 font-bold min-w-[65px]">
+                      <div className="flex flex-col items-center">
+                        <span>PG</span>
+                        <span className="text-[9px] text-zinc-500 font-normal lowercase">playmaker</span>
+                      </div>
+                    </th>
+                    <th className="py-3 px-2 text-center text-sky-400 font-bold min-w-[65px]">
+                      <div className="flex flex-col items-center">
+                        <span>SG</span>
+                        <span className="text-[9px] text-zinc-500 font-normal lowercase">guardia</span>
+                      </div>
+                    </th>
+                    <th className="py-3 px-2 text-center text-emerald-400 font-bold min-w-[65px]">
+                      <div className="flex flex-col items-center">
+                        <span>SF</span>
+                        <span className="text-[9px] text-zinc-500 font-normal lowercase">ala piccola</span>
+                      </div>
+                    </th>
+                    <th className="py-3 px-2 text-center text-amber-400 font-bold min-w-[65px]">
+                      <div className="flex flex-col items-center">
+                        <span>PF</span>
+                        <span className="text-[9px] text-zinc-500 font-normal lowercase">ala grande</span>
+                      </div>
+                    </th>
+                    <th className="py-3 px-2 text-center text-purple-400 font-bold min-w-[65px]">
+                      <div className="flex flex-col items-center">
+                        <span>C</span>
+                        <span className="text-[9px] text-zinc-500 font-normal lowercase">centro</span>
+                      </div>
+                    </th>
+                    <th className="py-3 px-3 text-center text-white font-bold min-w-[140px]">
+                      Totale Minuti
+                    </th>
+                    <th className="py-3 px-3 text-right min-w-[180px]">
+                      Stato Allenamento &amp; Forma
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-800/60 text-zinc-300">
+                  {filteredMatrixRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="py-8 text-center text-zinc-500 text-xs font-sans">
+                        Nessun giocatore corrisponde ai filtri selezionati.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredMatrixRows.map((r) => {
+                      const total = r.total_min || 0;
+                      const status = getGameShapeStatus(total);
+                      const matchingPlayer = players.find(p => String(p.playerid) === String(r.playerid));
+
+                      let totalColor = 'text-amber-400';
+                      let barColor = 'bg-amber-500';
+                      if (total >= 48 && total <= 75) {
+                        totalColor = 'text-emerald-400';
+                        barColor = 'bg-emerald-500';
+                      } else if (total > 75) {
+                        totalColor = 'text-rose-400';
+                        barColor = 'bg-rose-500';
+                      }
+
+                      return (
+                        <tr
+                          key={r.playerid}
+                          className="hover:bg-zinc-800/40 transition-colors group"
+                        >
+                          {/* Info Giocatore */}
+                          <td className="py-2.5 px-3">
+                            <div className="flex items-center gap-2.5">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 ${
+                                r.pos === 'PG' ? 'bg-blue-950/80 text-blue-400 border border-blue-500/30' :
+                                r.pos === 'SG' ? 'bg-sky-950/80 text-sky-400 border border-sky-500/30' :
+                                r.pos === 'SF' ? 'bg-emerald-950/80 text-emerald-400 border border-emerald-500/30' :
+                                r.pos === 'PF' ? 'bg-amber-950/80 text-amber-400 border border-amber-500/30' :
+                                'bg-purple-950/80 text-purple-400 border border-purple-500/30'
+                              }`}>
+                                {r.pos}
+                              </span>
+                              <div className="min-w-0">
+                                <button
+                                  onClick={() => {
+                                    if (matchingPlayer) {
+                                      setSelectedPlayer(matchingPlayer);
+                                      setPlayerModalOpen(true);
+                                    }
+                                  }}
+                                  className="text-left font-semibold text-white hover:text-indigo-300 transition-colors truncate block text-xs"
+                                  title="Visualizza scheda giocatore"
+                                >
+                                  {r.name}
+                                </button>
+                                <div className="text-[10px] text-zinc-500 font-mono flex items-center gap-1.5">
+                                  <span>#{r.playerid}</span>
+                                  {r.age ? <span>• {r.age}a</span> : null}
+                                  {r.salary ? <span>• €{Number(r.salary).toLocaleString('it-IT')}</span> : null}
+                                  <span className="text-zinc-400">• GS: <strong className="text-white">{r.game_shape}</strong></span>
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* PG Minutes */}
+                          <td className="py-2.5 px-2 text-center">
+                            {r.min_pg > 0 ? (
+                              <span className="inline-block px-2 py-1 rounded-md bg-blue-950/90 border border-blue-500/50 text-blue-300 font-bold font-mono text-xs shadow-sm">
+                                {r.min_pg}m
+                              </span>
+                            ) : (
+                              <span className="text-zinc-600 text-xs font-mono">—</span>
+                            )}
+                          </td>
+
+                          {/* SG Minutes */}
+                          <td className="py-2.5 px-2 text-center">
+                            {r.min_sg > 0 ? (
+                              <span className="inline-block px-2 py-1 rounded-md bg-sky-950/90 border border-sky-500/50 text-sky-300 font-bold font-mono text-xs shadow-sm">
+                                {r.min_sg}m
+                              </span>
+                            ) : (
+                              <span className="text-zinc-600 text-xs font-mono">—</span>
+                            )}
+                          </td>
+
+                          {/* SF Minutes */}
+                          <td className="py-2.5 px-2 text-center">
+                            {r.min_sf > 0 ? (
+                              <span className="inline-block px-2 py-1 rounded-md bg-emerald-950/90 border border-emerald-500/50 text-emerald-300 font-bold font-mono text-xs shadow-sm">
+                                {r.min_sf}m
+                              </span>
+                            ) : (
+                              <span className="text-zinc-600 text-xs font-mono">—</span>
+                            )}
+                          </td>
+
+                          {/* PF Minutes */}
+                          <td className="py-2.5 px-2 text-center">
+                            {r.min_pf > 0 ? (
+                              <span className="inline-block px-2 py-1 rounded-md bg-amber-950/90 border border-amber-500/50 text-amber-300 font-bold font-mono text-xs shadow-sm">
+                                {r.min_pf}m
+                              </span>
+                            ) : (
+                              <span className="text-zinc-600 text-xs font-mono">—</span>
+                            )}
+                          </td>
+
+                          {/* C Minutes */}
+                          <td className="py-2.5 px-2 text-center">
+                            {r.min_c > 0 ? (
+                              <span className="inline-block px-2 py-1 rounded-md bg-purple-950/90 border border-purple-500/50 text-purple-300 font-bold font-mono text-xs shadow-sm">
+                                {r.min_c}m
+                              </span>
+                            ) : (
+                              <span className="text-zinc-600 text-xs font-mono">—</span>
+                            )}
+                          </td>
+
+                          {/* Totale Minuti con barra */}
+                          <td className="py-2.5 px-3">
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between font-mono text-xs">
+                                <span className={`font-bold ${totalColor}`}>
+                                  {total} min
+                                </span>
+                                <span className="text-[10px] text-zinc-500">
+                                  {total >= 48 ? '100%' : `${Math.round((total / 48) * 100)}%`}
+                                </span>
+                              </div>
+                              <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden relative">
+                                <div
+                                  className="absolute top-0 bottom-0 w-0.5 bg-white/40 z-10"
+                                  style={{ left: '60%' }} // 48 su scala 80
+                                  title="Obiettivo 48 minuti"
+                                />
+                                <div
+                                  className={`h-full ${barColor} transition-all duration-300`}
+                                  style={{ width: `${Math.min(100, (total / 80) * 100)}%` }}
+                                />
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Stato Forma & Allenamento */}
+                          <td className="py-2.5 px-3 text-right">
+                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-[10px] font-bold border ${status.badgeClass}`}>
+                              {status.label}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+
+                {/* Footer Totali Squadra */}
+                <tfoot>
+                  <tr className="bg-zinc-950/90 border-t-2 border-zinc-700 font-bold text-xs">
+                    <td className="py-3 px-3 text-zinc-300 uppercase tracking-wider flex items-center gap-2">
+                      <span>TOTALE SQUADRA</span>
+                    </td>
+                    <td className="py-3 px-2 text-center text-blue-400 font-mono text-xs">
+                      {teamTotals.pg}m
+                    </td>
+                    <td className="py-3 px-2 text-center text-sky-400 font-mono text-xs">
+                      {teamTotals.sg}m
+                    </td>
+                    <td className="py-3 px-2 text-center text-emerald-400 font-mono text-xs">
+                      {teamTotals.sf}m
+                    </td>
+                    <td className="py-3 px-2 text-center text-amber-400 font-mono text-xs">
+                      {teamTotals.pf}m
+                    </td>
+                    <td className="py-3 px-2 text-center text-purple-400 font-mono text-xs">
+                      {teamTotals.c}m
+                    </td>
+                    <td className="py-3 px-3 text-center text-white font-mono text-sm">
+                      {teamTotals.total}m
+                    </td>
+                    <td className="py-3 px-3 text-right text-[11px] text-zinc-400 font-sans">
+                      {teamTotals.total >= 480 ? '✓ Minutaggio completo' : `${teamTotals.total}m giocati questa settimana`}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
             </div>
           </div>
         </div>
@@ -998,21 +1401,18 @@ export const BBeaterDashboard: React.FC<BBeaterDashboardProps> = ({
             <div className="px-5 py-4 border-b border-zinc-800 flex items-center justify-between">
               <div>
                 <h3 className="font-bold text-white text-sm">Ultime Partite &amp; Calendario</h3>
-                <p className="text-xs text-zinc-400 font-mono">Campionato Serie II.2 e Coppa Italia</p>
+                <p className="text-xs text-zinc-400 font-mono">Campionato Serie II.2 e Coppa Italia &bull; Sincronizzato da automazioni</p>
               </div>
-              <button
-                onClick={() => setMatchModalOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-mono font-semibold text-xs shadow-md shadow-red-950/40 transition-colors"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Aggiungi Risultato</span>
-              </button>
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-400 text-xs font-mono">
+                <Lock className="w-3.5 h-3.5 text-orange-400" />
+                <span>Aggiornato automaticamente</span>
+              </div>
             </div>
 
             <div className="divide-y divide-zinc-800">
               {matches.length === 0 ? (
                 <div className="p-8 text-center text-zinc-500 font-mono text-xs">
-                  Nessuna partita registrata. Clicca su "Registra Partita" per aggiungere il primo match.
+                  Nessuna partita registrata nel database per questa squadra. In attesa del feed automatico.
                 </div>
               ) : (
                 matches.map((match) => {

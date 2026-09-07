@@ -1,5 +1,5 @@
 import React from 'react';
-import { Shield, Database, Server, Plus, Settings, RefreshCw, UserCheck, Layers, Trophy, Flame, ChefHat } from 'lucide-react';
+import { Shield, Database, Server, Plus, Settings, RefreshCw, UserCheck, Layers, Trophy, Dribbble, ChefHat } from 'lucide-react';
 import { AuthMe, SystemStatus } from '../types';
 import metadata from '../../metadata.json';
 
@@ -42,7 +42,7 @@ export const Header: React.FC<HeaderProps> = ({
               <div>
                 <div className="flex items-center gap-2">
                   <h1 className="text-base sm:text-lg font-bold tracking-tight text-red-500">
-                    Fire<span className="text-white font-medium">Multip</span>
+                    Fire<span className="text-white font-medium">Multi</span>
                   </h1>
                   <span className="hidden sm:inline-block text-[10px] uppercase font-mono font-semibold px-2 py-0.5 rounded bg-zinc-900 text-zinc-400 border border-zinc-800">
                     v{system?.version || (metadata as any).version || '1.3.1'}
@@ -74,7 +74,7 @@ export const Header: React.FC<HeaderProps> = ({
                   activeAppTab === 'bbeater' ? 'bg-red-600 text-white font-bold' : 'text-zinc-400'
                 }`}
               >
-                <Flame className="w-3 h-3 text-amber-400" />
+                <Dribbble className="w-3 h-3 text-orange-400" />
                 <span>BB</span>
               </button>
               <button
@@ -124,7 +124,7 @@ export const Header: React.FC<HeaderProps> = ({
                   : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
               }`}
             >
-              <Flame className="w-3.5 h-3.5 text-amber-400" />
+              <Dribbble className="w-3.5 h-3.5 text-orange-400 animate-pulse" />
               <span>BuzzerBeater</span>
               <span className="px-1.5 py-0.2 rounded text-[10px] bg-red-950 text-red-300 border border-red-500/30">
                 PRO

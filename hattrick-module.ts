@@ -284,183 +284,17 @@ export function setupHattrick(db: DatabaseType, dbFilePath?: string): Router {
     }
   });
 
-  // Crea Giocatore
+  // Inserimenti e modifiche manuali disabilitati: database alimentato da automazioni esterne
   router.post('/players', (req: Request, res: Response) => {
-    try {
-      const {
-        FirstName,
-        LastName,
-        NickName = '',
-        PlayerNumber = 0,
-        Age = 20,
-        AgeDays = 0,
-        TSI = 1000,
-        PlayerForm = 6,
-        Experience = 3,
-        Loyalty = 10,
-        MotherClubBonus = 0,
-        Leadership = 4,
-        Salary = 1200,
-        Specialty = 0,
-        InjuryLevel = 0,
-        StaminaSkill = 6,
-        KeeperSkill = 1,
-        PlaymakerSkill = 1,
-        ScorerSkill = 1,
-        PassingSkill = 1,
-        WingerSkill = 1,
-        DefenderSkill = 1,
-        SetPiecesSkill = 1,
-        OwnerNotes = '',
-        TransferListed = 0
-      } = req.body;
-
-      if (!FirstName || !LastName) {
-        return res.status(400).json({ error: 'Nome e Cognome sono obbligatori' });
-      }
-
-      // Prendi TeamID e UserID correnti
-      const team = db.prepare('SELECT TeamID, UserID FROM "TeamDetails" LIMIT 1').get() as any;
-      const teamId = team ? team.TeamID : 1;
-      const userId = team ? team.UserID : 1;
-
-      // Genera nuovo PlayerID se non specificato
-      const maxId = (db.prepare('SELECT MAX(PlayerID) as maxId FROM "Player"').get() as any)?.maxId || 300000000;
-      const newPlayerId = maxId + 1;
-
-      const stmt = db.prepare(`
-        INSERT INTO "Player" (
-          PlayerID, FirstName, NickName, LastName, PlayerNumber, Age, AgeDays, ArrivalDate, OwnerNotes,
-          TSI, PlayerForm, Statement, Experience, Loyalty, MotherClubBonus, Leadership, Salary, IsAbroad,
-          Agreeability, Aggressiveness, Honesty, LeagueGoals, CupGoals, FriendliesGoals, CareerGoals,
-          CareerHattricks, MatchesCurrentTeam, GoalsCurrentTeam, AssistsCurrentTeam, CareerAssists,
-          Specialty, TransferListed, NationalTeamID, CountryID, Caps, CapsU20, Cards, InjuryLevel,
-          StaminaSkill, KeeperSkill, PlaymakerSkill, ScorerSkill, PassingSkill, WingerSkill, DefenderSkill,
-          SetPiecesSkill, PlayerCategoryId, OwnerNote, UserID, TeamID
-        ) VALUES (
-          ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?,
-          ?, ?, '', ?, ?, ?, ?, ?, 0,
-          3, 3, 3, 0, 0, 0, 0,
-          0, 0, 0, 0, 0,
-          ?, ?, 0, 4, 0, 0, 0, ?,
-          ?, ?, ?, ?, ?, ?, ?,
-          ?, 1, ?, ?, ?
-        )
-      `);
-
-      stmt.run(
-        newPlayerId, FirstName, NickName || null, LastName, parseInt(PlayerNumber, 10) || 0,
-        parseInt(Age, 10) || 19, parseInt(AgeDays, 10) || 0, OwnerNotes || '',
-        parseInt(TSI, 10) || 1000, parseInt(PlayerForm, 10) || 6,
-        parseInt(Experience, 10) || 1, parseInt(Loyalty, 10) || 1, MotherClubBonus ? 1 : 0,
-        parseInt(Leadership, 10) || 3, parseInt(Salary, 10) || 1000,
-        parseInt(Specialty, 10) || 0, TransferListed ? 1 : 0, parseInt(InjuryLevel, 10) || 0,
-        parseInt(StaminaSkill, 10) || 5, parseInt(KeeperSkill, 10) || 1, parseInt(PlaymakerSkill, 10) || 1,
-        parseInt(ScorerSkill, 10) || 1, parseInt(PassingSkill, 10) || 1, parseInt(WingerSkill, 10) || 1,
-        parseInt(DefenderSkill, 10) || 1, parseInt(SetPiecesSkill, 10) || 1,
-        OwnerNotes || '', userId, teamId
-      );
-
-      const created = db.prepare('SELECT * FROM "Player" WHERE PlayerID = ?').get(newPlayerId) as any;
-      const ratings = calculateRoleRatings(created);
-
-      res.status(201).json({
-        ...created,
-        bestRole: ratings.bestRole,
-        bestRating: ratings.bestRating,
-        roleRatings: ratings.all
-      });
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
-    }
+    res.status(403).json({ error: 'Operazione non consentita: il database di Hattrick è alimentato da automazioni esterne (sola lettura).' });
   });
 
-  // Modifica Giocatore
   router.put('/players/:id', (req: Request, res: Response) => {
-    try {
-      const id = parseInt(req.params.id, 10);
-      const existing = db.prepare('SELECT * FROM "Player" WHERE PlayerID = ?').get(id) as any;
-      if (!existing) {
-        return res.status(404).json({ error: 'Giocatore non trovato' });
-      }
-
-      const {
-        FirstName = existing.FirstName,
-        LastName = existing.LastName,
-        NickName = existing.NickName,
-        PlayerNumber = existing.PlayerNumber,
-        Age = existing.Age,
-        AgeDays = existing.AgeDays,
-        TSI = existing.TSI,
-        PlayerForm = existing.PlayerForm,
-        Experience = existing.Experience,
-        Loyalty = existing.Loyalty,
-        MotherClubBonus = existing.MotherClubBonus,
-        Leadership = existing.Leadership,
-        Salary = existing.Salary,
-        Specialty = existing.Specialty,
-        InjuryLevel = existing.InjuryLevel,
-        StaminaSkill = existing.StaminaSkill,
-        KeeperSkill = existing.KeeperSkill,
-        PlaymakerSkill = existing.PlaymakerSkill,
-        ScorerSkill = existing.ScorerSkill,
-        PassingSkill = existing.PassingSkill,
-        WingerSkill = existing.WingerSkill,
-        DefenderSkill = existing.DefenderSkill,
-        SetPiecesSkill = existing.SetPiecesSkill,
-        OwnerNotes = existing.OwnerNotes,
-        TransferListed = existing.TransferListed,
-        Cards = existing.Cards,
-        CareerGoals = existing.CareerGoals,
-        CareerAssists = existing.CareerAssists
-      } = req.body;
-
-      db.prepare(`
-        UPDATE "Player"
-        SET FirstName = ?, LastName = ?, NickName = ?, PlayerNumber = ?, Age = ?, AgeDays = ?,
-            TSI = ?, PlayerForm = ?, Experience = ?, Loyalty = ?, MotherClubBonus = ?, Leadership = ?,
-            Salary = ?, Specialty = ?, InjuryLevel = ?, StaminaSkill = ?, KeeperSkill = ?,
-            PlaymakerSkill = ?, ScorerSkill = ?, PassingSkill = ?, WingerSkill = ?, DefenderSkill = ?,
-            SetPiecesSkill = ?, OwnerNotes = ?, TransferListed = ?, Cards = ?,
-            CareerGoals = ?, CareerAssists = ?
-        WHERE PlayerID = ?
-      `).run(
-        FirstName, LastName, NickName, parseInt(PlayerNumber, 10), parseInt(Age, 10), parseInt(AgeDays, 10),
-        parseInt(TSI, 10), parseInt(PlayerForm, 10), parseInt(Experience, 10), parseInt(Loyalty, 10),
-        MotherClubBonus ? 1 : 0, parseInt(Leadership, 10), parseInt(Salary, 10), parseInt(Specialty, 10),
-        parseInt(InjuryLevel, 10), parseInt(StaminaSkill, 10), parseInt(KeeperSkill, 10),
-        parseInt(PlaymakerSkill, 10), parseInt(ScorerSkill, 10), parseInt(PassingSkill, 10),
-        parseInt(WingerSkill, 10), parseInt(DefenderSkill, 10), parseInt(SetPiecesSkill, 10),
-        OwnerNotes, TransferListed ? 1 : 0, parseInt(Cards, 10), parseInt(CareerGoals, 10),
-        parseInt(CareerAssists, 10), id
-      );
-
-      const updated = db.prepare('SELECT * FROM "Player" WHERE PlayerID = ?').get(id) as any;
-      const ratings = calculateRoleRatings(updated);
-
-      res.json({
-        ...updated,
-        bestRole: ratings.bestRole,
-        bestRating: ratings.bestRating,
-        roleRatings: ratings.all
-      });
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
-    }
+    res.status(403).json({ error: 'Operazione non consentita: il database di Hattrick è alimentato da automazioni esterne (sola lettura).' });
   });
 
-  // Elimina Giocatore
   router.delete('/players/:id', (req: Request, res: Response) => {
-    try {
-      const id = parseInt(req.params.id, 10);
-      const result = db.prepare('DELETE FROM "Player" WHERE PlayerID = ?').run(id);
-      if (result.changes === 0) {
-        return res.status(404).json({ error: 'Giocatore non trovato' });
-      }
-      res.json({ ok: true, message: `Giocatore #${id} eliminato con successo` });
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
-    }
+    res.status(403).json({ error: 'Operazione non consentita: il database di Hattrick è alimentato da automazioni esterne (sola lettura).' });
   });
 
   // Statistiche Aggregate Squadra
@@ -566,15 +400,9 @@ export function setupHattrick(db: DatabaseType, dbFilePath?: string): Router {
     }
   });
 
-  // Ripristina o Ricarica Squadra Demo
+  // Ripristina o Ricarica Squadra Demo (Disabilitato in sola lettura)
   router.post('/seed', (req: Request, res: Response) => {
-    try {
-      db.exec('DELETE FROM "Player"; DELETE FROM "TeamDetails"; DELETE FROM "users";');
-      seedHattrickDemo(db);
-      res.json({ ok: true, message: 'Squadra e dati Hattrick rigenerati con successo.' });
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
-    }
+    res.status(403).json({ error: 'Operazione non consentita: il database di Hattrick è alimentato da automazioni esterne (sola lettura).' });
   });
 
   return router;

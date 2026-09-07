@@ -7,8 +7,31 @@ import { setupBBeater } from './bbeater-module';
 import { setupAnDa } from './anda-module';
 import { setupHattrick } from './hattrick-module';
 
-// 2. PORTA 3000 (Fissa per container e proxy Nginx, con supporto LOCAL_PORT per deploy systemd)
-const PORT = process.env.LOCAL_PORT ? parseInt(process.env.LOCAL_PORT, 10) : 3000;
+// Rilevamento ambiente: Google AI Studio Sandbox vs Server di produzione (Systemd/VPS)
+const isAiStudio = Boolean(
+  process.env.APPLET_ID || 
+  process.env.K_SERVICE || 
+  process.env.CONTROL_PLANE_PORT ||
+  process.env.FORCE_PREVIEW === 'true'
+) && !fs.existsSync('/home/fire/bots');
+
+// PORT MANAGEMENT:
+// - Su Google AI Studio: il proxy reverse interno dell'ambiente isolato instrada solo su porta 3000.
+// - In produzione (deploy systemd tramite gen_web.sh sul tuo server):
+//   legge ESATTAMENTE la porta dinamica assegnata da systemd tramite Environment="PORT=${node_port}"
+//   (es. 4000, 4001, 4002...) o process.env.LOCAL_PORT, evitando categoricamente conflitti sulla porta 3000!
+const PORT: number = (() => {
+  if (process.env.LOCAL_PORT) {
+    return parseInt(process.env.LOCAL_PORT, 10);
+  }
+  if (isAiStudio) {
+    return 3000;
+  }
+  if (process.env.PORT) {
+    return parseInt(process.env.PORT, 10);
+  }
+  return 3000;
+})();
 
 // Lettura dinamica di versione e metadati da metadata.json
 function getAppMetadata(): { version: string; name: string } {
@@ -81,7 +104,7 @@ ensureDbDir(bbeaterDbPath);
 const bbeaterDb = bbeaterDbPath === dbPath ? db : (() => {
   const bDb = new Database(bbeaterDbPath);
   bDb.pragma('journal_mode = WAL');
-  bDb.pragma('foreign_keys = ON');
+  bDb.pragma('foreign_keys = OFF');
   return bDb;
 })();
 
@@ -901,12 +924,12 @@ async function startServer() {
       let utenti: any[] = [];
 
       try {
-        giocatori = db.prepare('SELECT * FROM giocatori').all();
-        partite = db.prepare('SELECT * FROM partite').all();
-        arena = db.prepare('SELECT * FROM arena').all();
-        economia = db.prepare('SELECT * FROM economia').all();
-        minutigiocati = db.prepare('SELECT * FROM minutigiocati').all();
-        utenti = db.prepare('SELECT * FROM utenti').all();
+        giocatori = bbeaterDb.prepare('SELECT * FROM giocatori').all();
+        partite = bbeaterDb.prepare('SELECT * FROM partite').all();
+        arena = bbeaterDb.prepare('SELECT * FROM arena').all();
+        economia = bbeaterDb.prepare('SELECT * FROM economia').all();
+        minutigiocati = bbeaterDb.prepare('SELECT * FROM minutigiocati').all();
+        utenti = bbeaterDb.prepare('SELECT * FROM utenti').all();
       } catch (e) {}
 
       let andaCategories: any[] = [];
@@ -1016,12 +1039,12 @@ async function startServer() {
         if (buzzerbeater && typeof buzzerbeater === 'object') {
           if (overwrite) {
             try {
-              db.exec('DELETE FROM minutigiocati; DELETE FROM giocatori; DELETE FROM partite;');
+              bbeaterDb.exec('DELETE FROM minutigiocati; DELETE FROM giocatori; DELETE FROM partite;');
             } catch (e) {}
           }
 
           if (Array.isArray(buzzerbeater.giocatori)) {
-            const insertG = db.prepare(`
+            const insertG = bbeaterDb.prepare(`
               INSERT OR REPLACE INTO giocatori (
                 id, user_id, playerid, owner, name, pos, min, js, jr, od, ha, dr, pa, ish, ide, rb, sb, st, ft, ex, gs, age, height, potential, dmi, salary,
                 skill_tot, skill_int, skill_out, data_import
@@ -1036,7 +1059,7 @@ async function startServer() {
           }
 
           if (Array.isArray(buzzerbeater.minutigiocati)) {
-            const insertMin = db.prepare(`
+            const insertMin = bbeaterDb.prepare(`
               INSERT OR REPLACE INTO minutigiocati (id, match_id, user_id, playerid, player_name, position, minuti_giocati, inizio, fine)
               VALUES (@id, @match_id, @user_id, @playerid, @player_name, @position, @minuti_giocati, @inizio, @fine)
             `);
@@ -1046,7 +1069,7 @@ async function startServer() {
           }
 
           if (Array.isArray(buzzerbeater.partite)) {
-            const insertP = db.prepare(`
+            const insertP = bbeaterDb.prepare(`
               INSERT OR REPLACE INTO partite (
                 id, user_id, matchid, stagione, teamAway, risAway, risHome, teamHome, date, type, retrieve, inizio, fine,
                 bleachers, lower_tier, courtside, luxury, total_attendance
@@ -1205,7 +1228,9 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
+    const distPath = fs.existsSync(path.join(process.cwd(), 'dist', 'index.html'))
+      ? path.join(process.cwd(), 'dist')
+      : process.cwd();
     app.use(express.static(distPath));
     app.get('*', (req: Request, res: Response) => {
       res.sendFile(path.join(distPath, 'index.html'));
