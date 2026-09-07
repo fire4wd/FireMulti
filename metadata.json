@@ -1,0 +1,7 @@
+{
+  "name": "FireMultip",
+  "version": "1.3.1",
+  "description": "FireMultip: suite full-stack Node.js Express con database SQLite locali indipendenti per Masaniello, BuzzerBeater (§UTC), ricettario parametrico AnDa e Hattrick Football Manager.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
