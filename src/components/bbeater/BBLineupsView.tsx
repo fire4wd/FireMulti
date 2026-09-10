@@ -99,31 +99,31 @@ export const BBLineupsView: React.FC<BBLineupsViewProps> = ({ selectedUser }) =>
   return (
     <div className="space-y-6 font-sans">
       {/* 1. Header & Period Banner */}
-      <div className="bg-gradient-to-r from-zinc-900 via-zinc-900 to-orange-950/30 border border-zinc-800 rounded-2xl p-5 shadow-lg">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-orange-950/80 border border-orange-500/50 flex items-center justify-center text-orange-400 shadow-inner">
-              <Dribbble className="w-6 h-6" />
+      <div className="bg-gradient-to-r from-zinc-900 via-zinc-900 to-orange-950/30 border border-zinc-800 rounded-2xl p-6 shadow-lg">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 rounded-2xl bg-orange-950/80 border border-orange-500/50 flex items-center justify-center text-orange-400 shadow-inner shrink-0">
+              <Dribbble className="w-7 h-7" />
             </div>
             <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-lg font-black tracking-tight text-white flex items-center gap-2">
+              <div className="flex items-center gap-3 flex-wrap">
+                <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-white flex items-center gap-3">
                   <span>3 Migliori Quintetti</span>
-                  <span className="text-orange-400 font-mono text-xs px-2 py-0.5 rounded bg-orange-950/60 border border-orange-500/40">
+                  <span className="text-orange-400 font-mono text-xs px-2.5 py-0.5 rounded-lg bg-orange-950/80 border border-orange-500/40">
                     BuzzerBeater Optima
                   </span>
                 </h2>
               </div>
-              <p className="text-xs text-zinc-400 font-mono mt-1 flex items-center gap-2 flex-wrap">
-                <span className="flex items-center gap-1">
-                  <Calendar className="w-3.5 h-3.5 text-zinc-500" />
+              <p className="text-sm text-zinc-300 font-mono mt-1.5 flex items-center gap-2.5 flex-wrap">
+                <span className="flex items-center gap-1.5">
+                  <Calendar className="w-4 h-4 text-zinc-400" />
                   <span>Settimana di gioco:</span>
-                  <strong className="text-zinc-200">{period.inizio} &rarr; {period.fine}</strong>
+                  <strong className="text-zinc-100">{period.inizio} &rarr; {period.fine}</strong>
                 </span>
                 <span className="text-zinc-600">&bull;</span>
-                <span>Atleti analizzati: <strong className="text-orange-400">{totalPlayersAnalyzed}</strong></span>
+                <span>Atleti analizzati: <strong className="text-orange-400 font-bold">{totalPlayersAnalyzed}</strong></span>
                 <span className="text-zinc-600">&bull;</span>
-                <span>Utente attivo: <strong className="text-zinc-200 uppercase">{selectedUser}</strong></span>
+                <span>Utente attivo: <strong className="text-zinc-100 uppercase">{selectedUser}</strong></span>
               </p>
             </div>
           </div>
@@ -132,10 +132,10 @@ export const BBLineupsView: React.FC<BBLineupsViewProps> = ({ selectedUser }) =>
             <button
               onClick={loadLineups}
               disabled={loading}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white font-mono text-xs transition-colors"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 text-zinc-200 hover:text-white font-mono text-sm font-semibold transition-colors shadow-sm"
               title="Ricalcola e sincronizza quintetti"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-orange-400' : ''}`} />
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-orange-400' : ''}`} />
               <span>Ricalcola</span>
             </button>
           </div>
@@ -143,32 +143,32 @@ export const BBLineupsView: React.FC<BBLineupsViewProps> = ({ selectedUser }) =>
       </div>
 
       {/* 2. Top Summary Bento Cards for 3 Quintetti */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* 1° Quintetto */}
         <div
           onClick={() => setSelectedLineupTab('first')}
-          className={`cursor-pointer p-4 rounded-2xl border transition-all ${
+          className={`cursor-pointer p-5 rounded-2xl border transition-all ${
             selectedLineupTab === 'first'
               ? 'bg-gradient-to-b from-amber-950/30 to-zinc-900 border-amber-500/60 shadow-lg shadow-amber-950/30 ring-1 ring-amber-500/40'
               : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700'
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
-              <Trophy className="w-3.5 h-3.5" />
+            <span className="text-xs font-mono font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+              <Trophy className="w-4 h-4" />
               <span>1° Quintetto (Titolari)</span>
             </span>
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-500/30 font-bold">
+            <span className="text-xs font-mono px-2 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-500/40 font-bold">
               TOP 1
             </span>
           </div>
           <div className="mt-3 flex items-baseline justify-between">
-            <span className="text-2xl font-black font-mono text-white">
+            <span className="text-3xl font-black font-mono text-white">
               {totalsSummary.first.toFixed(2)}
             </span>
-            <span className="text-xs font-mono text-zinc-400">Rating Totale</span>
+            <span className="text-sm font-mono text-zinc-400">Rating Totale</span>
           </div>
-          <p className="text-[11px] font-mono text-zinc-400 mt-2 truncate">
+          <p className="text-xs font-mono text-zinc-400 mt-2 truncate">
             {bestLineup.players.length === 5
               ? bestLineup.players.map((p) => p.pos).join(' • ')
               : 'Quintetto incompleto'}
@@ -178,28 +178,28 @@ export const BBLineupsView: React.FC<BBLineupsViewProps> = ({ selectedUser }) =>
         {/* 2° Quintetto */}
         <div
           onClick={() => setSelectedLineupTab('second')}
-          className={`cursor-pointer p-4 rounded-2xl border transition-all ${
+          className={`cursor-pointer p-5 rounded-2xl border transition-all ${
             selectedLineupTab === 'second'
               ? 'bg-gradient-to-b from-sky-950/30 to-zinc-900 border-sky-500/60 shadow-lg shadow-sky-950/30 ring-1 ring-sky-500/40'
               : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700'
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-sky-400 flex items-center gap-1.5">
-              <Shield className="w-3.5 h-3.5" />
+            <span className="text-xs font-mono font-bold uppercase tracking-wider text-sky-400 flex items-center gap-1.5">
+              <Shield className="w-4 h-4" />
               <span>2° Quintetto (Panchina)</span>
             </span>
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-sky-950 text-sky-300 border border-sky-500/30 font-bold">
+            <span className="text-xs font-mono px-2 py-0.5 rounded bg-sky-950 text-sky-300 border border-sky-500/40 font-bold">
               TOP 2
             </span>
           </div>
           <div className="mt-3 flex items-baseline justify-between">
-            <span className="text-2xl font-black font-mono text-white">
+            <span className="text-3xl font-black font-mono text-white">
               {totalsSummary.second.toFixed(2)}
             </span>
-            <span className="text-xs font-mono text-zinc-400">Rating Totale</span>
+            <span className="text-sm font-mono text-zinc-400">Rating Totale</span>
           </div>
-          <p className="text-[11px] font-mono text-zinc-400 mt-2 truncate">
+          <p className="text-xs font-mono text-zinc-400 mt-2 truncate">
             {secondBestLineup.players.length === 5
               ? secondBestLineup.players.map((p) => p.pos).join(' • ')
               : 'Meno di 10 giocatori'}
@@ -209,28 +209,28 @@ export const BBLineupsView: React.FC<BBLineupsViewProps> = ({ selectedUser }) =>
         {/* 3° Quintetto */}
         <div
           onClick={() => setSelectedLineupTab('third')}
-          className={`cursor-pointer p-4 rounded-2xl border transition-all ${
+          className={`cursor-pointer p-5 rounded-2xl border transition-all ${
             selectedLineupTab === 'third'
               ? 'bg-gradient-to-b from-orange-950/30 to-zinc-900 border-orange-500/60 shadow-lg shadow-orange-950/30 ring-1 ring-orange-500/40'
               : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700'
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-orange-400 flex items-center gap-1.5">
-              <Zap className="w-3.5 h-3.5" />
+            <span className="text-xs font-mono font-bold uppercase tracking-wider text-orange-400 flex items-center gap-1.5">
+              <Zap className="w-4 h-4" />
               <span>3° Quintetto (Riserve)</span>
             </span>
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-orange-950 text-orange-300 border border-orange-500/30 font-bold">
+            <span className="text-xs font-mono px-2 py-0.5 rounded bg-orange-950 text-orange-300 border border-orange-500/40 font-bold">
               TOP 3
             </span>
           </div>
           <div className="mt-3 flex items-baseline justify-between">
-            <span className="text-2xl font-black font-mono text-white">
+            <span className="text-3xl font-black font-mono text-white">
               {totalsSummary.third.toFixed(2)}
             </span>
-            <span className="text-xs font-mono text-zinc-400">Rating Totale</span>
+            <span className="text-sm font-mono text-zinc-400">Rating Totale</span>
           </div>
-          <p className="text-[11px] font-mono text-zinc-400 mt-2 truncate">
+          <p className="text-xs font-mono text-zinc-400 mt-2 truncate">
             {thirdBestLineup.players.length === 5
               ? thirdBestLineup.players.map((p) => p.pos).join(' • ')
               : `${thirdBestLineup.players.length}/5 assegnati`}

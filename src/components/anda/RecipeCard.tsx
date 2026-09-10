@@ -71,49 +71,49 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({
           <div className="absolute inset-0 bg-gradient-to-t from-zinc-900 via-transparent to-black/40" />
 
           {/* Category Pill Top Left */}
-          <div className="absolute top-3 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-950/80 backdrop-blur-md border border-zinc-700/60 text-xs font-mono text-white">
+          <div className="absolute top-3 left-3 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-950/85 backdrop-blur-md border border-zinc-700/60 text-xs font-mono text-white font-semibold">
             {getCategoryIcon(recipe.category_icon)}
             <span>{recipe.category_name || recipe.category || 'Generale'}</span>
           </div>
 
           {/* Parametric badge */}
           {Boolean(recipe.is_parametric) && (
-            <div className="absolute top-3 right-3 flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-500/90 text-zinc-950 text-[11px] font-mono font-bold shadow-md">
-              <Calculator className="w-3 h-3" />
+            <div className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500 text-zinc-950 text-xs font-mono font-bold shadow-md">
+              <Calculator className="w-3.5 h-3.5" />
               <span>Parametrica</span>
             </div>
           )}
         </div>
 
         {/* Card Body */}
-        <div className="p-4 space-y-3">
+        <div className="p-5 space-y-3.5">
           <div>
-            <h3 className="text-base font-bold text-white group-hover:text-amber-400 transition-colors line-clamp-1">
+            <h3 className="text-lg font-bold text-white group-hover:text-amber-400 transition-colors line-clamp-1">
               {recipe.name}
             </h3>
             {recipe.description && (
-              <p className="text-xs text-zinc-400 line-clamp-2 mt-1 leading-relaxed">
+              <p className="text-sm text-zinc-400 line-clamp-2 mt-1 leading-relaxed">
                 {recipe.description}
               </p>
             )}
           </div>
 
           {/* Meta specs row */}
-          <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
+          <div className="flex flex-wrap items-center gap-2.5 text-xs font-mono">
             {recipe.prep_time !== undefined && recipe.prep_time > 0 && (
-              <span className="flex items-center gap-1 text-zinc-400 bg-zinc-950 px-2 py-0.5 rounded border border-zinc-800" title="Tempo di preparazione">
-                <Clock className="w-3 h-3 text-amber-400" />
+              <span className="flex items-center gap-1.5 text-zinc-300 bg-zinc-950 px-2.5 py-1 rounded-lg border border-zinc-800" title="Tempo di preparazione">
+                <Clock className="w-3.5 h-3.5 text-amber-400" />
                 <span>Prep: {recipe.prep_time}m</span>
               </span>
             )}
             {recipe.cook_time !== undefined && recipe.cook_time > 0 && (
-              <span className="flex items-center gap-1 text-zinc-400 bg-zinc-950 px-2 py-0.5 rounded border border-zinc-800" title="Tempo di cottura">
-                <Flame className="w-3 h-3 text-red-400" />
+              <span className="flex items-center gap-1.5 text-zinc-300 bg-zinc-950 px-2.5 py-1 rounded-lg border border-zinc-800" title="Tempo di cottura">
+                <Flame className="w-3.5 h-3.5 text-red-400" />
                 <span>Cottura: {recipe.cook_time}m</span>
               </span>
             )}
             {recipe.difficulty && (
-              <span className={`px-2 py-0.5 rounded border text-[10px] font-bold ${getDifficultyColor(recipe.difficulty)}`}>
+              <span className={`px-2.5 py-1 rounded-lg border text-xs font-bold ${getDifficultyColor(recipe.difficulty)}`}>
                 {recipe.difficulty}
               </span>
             )}
@@ -122,27 +122,27 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({
       </div>
 
       {/* Card Footer */}
-      <div className="px-4 py-3 bg-zinc-950/60 border-t border-zinc-800/80 flex items-center justify-between font-mono text-xs text-zinc-500">
-        <div className="flex items-center gap-2 text-[11px]">
-          <span>{recipe.ingredients_count || 0} ingr.</span>
+      <div className="px-5 py-3.5 bg-zinc-950/60 border-t border-zinc-800/80 flex items-center justify-between font-mono text-xs text-zinc-400">
+        <div className="flex items-center gap-2.5 text-xs font-medium">
+          <span>{recipe.ingredients_count || 0} ingredienti</span>
           <span>•</span>
           <span>{recipe.procedures_count || 0} passaggi</span>
         </div>
 
-        <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
           <button
             onClick={(e) => onEdit(recipe, e)}
-            className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
+            className="p-2 rounded-xl hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
             title="Modifica ricetta"
           >
-            <Edit3 className="w-3.5 h-3.5" />
+            <Edit3 className="w-4 h-4" />
           </button>
           <button
             onClick={(e) => onDelete(recipe, e)}
-            className="p-1.5 rounded-lg hover:bg-red-950/50 text-zinc-400 hover:text-red-400 transition-colors"
+            className="p-2 rounded-xl hover:bg-red-950/50 text-zinc-400 hover:text-red-400 transition-colors"
             title="Elimina ricetta"
           >
-            <Trash2 className="w-3.5 h-3.5" />
+            <Trash2 className="w-4 h-4" />
           </button>
         </div>
       </div>

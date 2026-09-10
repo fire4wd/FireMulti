@@ -354,37 +354,37 @@ export const BBeaterDashboard: React.FC<BBeaterDashboardProps> = ({
   return (
     <div className="space-y-6 font-sans text-zinc-100">
       {/* 0. Scelta Utente in Testa (tabella utenti campo user) */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 shadow-md">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 shadow-md">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-red-950/70 border border-red-500/40 flex items-center justify-center text-red-400 shrink-0">
-              <UserCheck className="w-5 h-5" />
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-red-950/70 border border-red-500/40 flex items-center justify-center text-red-400 shrink-0 shadow">
+              <UserCheck className="w-6 h-6" />
             </div>
             <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-300">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <span className="text-sm font-mono font-bold uppercase tracking-wider text-zinc-200">
                   Scelta Utente
                 </span>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700">
+                <span className="text-xs font-mono px-2.5 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">
                   tabella utenti.user
                 </span>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950/70 text-emerald-400 border border-emerald-500/30">
+                <span className="text-xs font-mono px-2.5 py-0.5 rounded bg-emerald-950/80 text-emerald-400 border border-emerald-500/40 font-semibold">
                   owner &amp; user_id = {selectedUser}
                 </span>
               </div>
-              <p className="text-xs text-zinc-400 font-mono mt-0.5">
-                Squadra: <strong className="text-white">{currentUserObj?.nomesquadra || team?.nomesquadra || 'UTC'}</strong>
-                <span className="text-zinc-500 mx-1.5">•</span>
-                Team ID: <strong className="text-zinc-300">{currentUserObj?.teamid || team?.teamid || 102934}</strong>
-                <span className="text-zinc-500 mx-1.5">•</span>
-                Serie: <strong className="text-amber-400">{currentUserObj?.serie || team?.serie || 'Serie II.2'}</strong>
+              <p className="text-sm text-zinc-400 font-mono mt-1">
+                Squadra: <strong className="text-white text-base">{currentUserObj?.nomesquadra || team?.nomesquadra || 'UTC'}</strong>
+                <span className="text-zinc-500 mx-2">•</span>
+                Team ID: <strong className="text-zinc-200">{currentUserObj?.teamid || team?.teamid || 102934}</strong>
+                <span className="text-zinc-500 mx-2">•</span>
+                Serie: <strong className="text-amber-400 font-bold">{currentUserObj?.serie || team?.serie || 'Serie II.2'}</strong>
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5">
-            <label htmlFor="bb-user-select" className="text-xs font-mono text-zinc-400 flex items-center gap-1.5 whitespace-nowrap">
-              <User className="w-3.5 h-3.5 text-red-400" />
+          <div className="flex items-center gap-3">
+            <label htmlFor="bb-user-select" className="text-sm font-mono text-zinc-300 flex items-center gap-2 whitespace-nowrap font-medium">
+              <User className="w-4 h-4 text-red-400" />
               <span>Utente:</span>
             </label>
             <div className="relative">
@@ -392,7 +392,7 @@ export const BBeaterDashboard: React.FC<BBeaterDashboardProps> = ({
                 id="bb-user-select"
                 value={selectedUser}
                 onChange={(e) => setSelectedUser(e.target.value)}
-                className="appearance-none bg-zinc-950 border border-zinc-700 hover:border-zinc-500 focus:border-red-500 text-white font-mono text-xs font-bold rounded-xl px-3.5 py-2.5 pr-9 focus:outline-none focus:ring-1 focus:ring-red-500 transition-colors cursor-pointer min-w-[180px]"
+                className="appearance-none bg-zinc-950 border border-zinc-700 hover:border-zinc-500 focus:border-red-500 text-white font-mono text-sm font-bold rounded-xl px-4 py-2.5 pr-10 focus:outline-none focus:ring-1 focus:ring-red-500 transition-colors cursor-pointer min-w-[210px]"
               >
                 {usersList.length > 0 ? (
                   usersList.map((u) => (
@@ -404,7 +404,7 @@ export const BBeaterDashboard: React.FC<BBeaterDashboardProps> = ({
                   <option value="fire">fire — UTC</option>
                 )}
               </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-zinc-400">
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3.5 text-zinc-400">
                 <ChevronDown className="w-4 h-4" />
               </div>
             </div>
@@ -413,54 +413,54 @@ export const BBeaterDashboard: React.FC<BBeaterDashboardProps> = ({
       </div>
 
       {/* 1. Header Team Bento Banner */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 shadow-lg relative overflow-hidden">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-lg relative overflow-hidden">
         <div className="absolute -right-10 -bottom-10 opacity-5 pointer-events-none text-red-500">
           <Trophy className="w-64 h-64" />
         </div>
 
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-red-600 to-red-950 border border-red-500/40 flex items-center justify-center text-white shadow-lg shadow-red-950/50">
-              <Flame className="w-8 h-8" />
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-red-600 to-red-950 border border-red-500/40 flex items-center justify-center text-white shadow-lg shadow-red-950/50 shrink-0">
+              <Flame className="w-9 h-9" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white">
+              <div className="flex items-center gap-3">
+                <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
                   {currentUserObj?.nomesquadra || team?.nomesquadra || team?.nome || '§UTC'}
                 </h1>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-red-950/60 border border-red-500/30 text-red-400">
+                <span className="px-3 py-1 rounded-full text-xs font-mono font-bold bg-red-950/80 border border-red-500/40 text-red-400">
                   {currentUserObj?.serie || team?.serie || team?.lega || 'Serie II.2'}
                 </span>
               </div>
-              <p className="text-xs text-zinc-400 font-mono flex items-center gap-2 mt-0.5">
-                <span>Manager: <strong className="text-zinc-200">{selectedUser}</strong></span>
+              <p className="text-sm text-zinc-300 font-mono flex items-center gap-2.5 mt-1">
+                <span>Manager: <strong className="text-zinc-100">{selectedUser}</strong></span>
                 <span>•</span>
-                <span>Record: <strong className="text-emerald-400">18 - 4 (1° Posto)</strong></span>
+                <span>Record: <strong className="text-emerald-400 font-bold">18 - 4 (1° Posto)</strong></span>
                 <span>•</span>
-                <span>Stagione: <strong className="text-amber-400">65</strong></span>
+                <span>Stagione: <strong className="text-amber-400 font-bold">65</strong></span>
               </p>
             </div>
           </div>
 
           {/* Quick Metric Chips */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 font-mono text-xs">
-            <div className="bg-zinc-950/80 border border-zinc-800/80 px-3 py-2 rounded-xl">
-              <span className="text-[10px] text-zinc-400 uppercase tracking-wider block">Roster</span>
-              <span className="text-sm font-bold text-white">{players.length} Atleti</span>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 font-mono">
+            <div className="bg-zinc-950/90 border border-zinc-800 px-4 py-3 rounded-xl">
+              <span className="text-xs text-zinc-400 uppercase tracking-wider block font-bold">Roster</span>
+              <span className="text-lg font-extrabold text-white mt-0.5 block">{players.length} Atleti</span>
             </div>
-            <div className="bg-zinc-950/80 border border-zinc-800/80 px-3 py-2 rounded-xl">
-              <span className="text-[10px] text-zinc-400 uppercase tracking-wider block">Stipendi/Sett</span>
-              <span className="text-sm font-bold text-red-400">${totalSalaries.toLocaleString()}</span>
+            <div className="bg-zinc-950/90 border border-zinc-800 px-4 py-3 rounded-xl">
+              <span className="text-xs text-zinc-400 uppercase tracking-wider block font-bold">Stipendi/Sett</span>
+              <span className="text-lg font-extrabold text-red-400 mt-0.5 block">${totalSalaries.toLocaleString()}</span>
             </div>
-            <div className="bg-zinc-950/80 border border-zinc-800/80 px-3 py-2 rounded-xl">
-              <span className="text-[10px] text-zinc-400 uppercase tracking-wider block">Capienza</span>
-              <span className="text-sm font-bold text-cyan-400">
+            <div className="bg-zinc-950/90 border border-zinc-800 px-4 py-3 rounded-xl">
+              <span className="text-xs text-zinc-400 uppercase tracking-wider block font-bold">Capienza</span>
+              <span className="text-lg font-extrabold text-cyan-400 mt-0.5 block">
                 {arena ? ((arena.bleachers || 0) + (arena.lower_tier || 0) + (arena.courtside || 0) + (arena.luxury || 0)).toLocaleString() : '10.365'}
               </span>
             </div>
-            <div className="bg-zinc-950/80 border border-zinc-800/80 px-3 py-2 rounded-xl">
-              <span className="text-[10px] text-zinc-400 uppercase tracking-wider block">Cassa</span>
-              <span className="text-sm font-bold text-emerald-400">
+            <div className="bg-zinc-950/90 border border-zinc-800 px-4 py-3 rounded-xl">
+              <span className="text-xs text-zinc-400 uppercase tracking-wider block font-bold">Cassa</span>
+              <span className="text-lg font-extrabold text-emerald-400 mt-0.5 block">
                 ${(economy?.saldo_attuale ?? economy?.current ?? economy?.Initial ?? 966800).toLocaleString()}
               </span>
             </div>
@@ -470,91 +470,91 @@ export const BBeaterDashboard: React.FC<BBeaterDashboardProps> = ({
 
       {/* 2. Navigation Tabs (Bento Sub-Navigation) */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800/80 pb-3">
-        <div className="flex flex-wrap items-center gap-1.5 p-1 bg-zinc-900 border border-zinc-800 rounded-xl font-mono text-xs">
+        <div className="flex flex-wrap items-center gap-2 p-1.5 bg-zinc-900 border border-zinc-800 rounded-2xl font-mono text-sm">
           <button
             onClick={() => setSubTab('lineups')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg transition-colors ${
+            className={`flex items-center gap-2.5 px-4 py-2 rounded-xl transition-colors ${
               subTab === 'lineups'
-                ? 'bg-orange-600 text-white font-bold shadow-sm'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                ? 'bg-orange-600 text-white font-bold shadow-md'
+                : 'text-zinc-300 hover:text-white hover:bg-zinc-800'
             }`}
           >
-            <Dribbble className="w-3.5 h-3.5 text-orange-400" />
+            <Dribbble className="w-4 h-4 text-orange-400" />
             <span>3 Migliori Quintetti</span>
-            <span className="px-1.5 py-0.2 rounded text-[10px] bg-orange-950 text-orange-300 border border-orange-500/30">
+            <span className="px-2 py-0.5 rounded text-xs bg-orange-950 text-orange-300 border border-orange-500/40 font-bold">
               TOP
             </span>
           </button>
 
           <button
             onClick={() => setSubTab('roster')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg transition-colors ${
+            className={`flex items-center gap-2.5 px-4 py-2 rounded-xl transition-colors ${
               subTab === 'roster'
-                ? 'bg-red-600 text-white font-bold shadow-sm'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                ? 'bg-red-600 text-white font-bold shadow-md'
+                : 'text-zinc-300 hover:text-white hover:bg-zinc-800'
             }`}
           >
-            <Users className="w-3.5 h-3.5" />
+            <Users className="w-4 h-4" />
             <span>Roster &amp; Skill ({players.length})</span>
           </button>
 
           <button
             onClick={() => setSubTab('minutes')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg transition-colors ${
+            className={`flex items-center gap-2.5 px-4 py-2 rounded-xl transition-colors ${
               subTab === 'minutes'
-                ? 'bg-red-600 text-white font-bold shadow-sm'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                ? 'bg-red-600 text-white font-bold shadow-md'
+                : 'text-zinc-300 hover:text-white hover:bg-zinc-800'
             }`}
           >
-            <Clock className="w-3.5 h-3.5" />
+            <Clock className="w-4 h-4" />
             <span>Minuti &amp; Forma (48m)</span>
           </button>
 
           <button
             onClick={() => setSubTab('matches')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg transition-colors ${
+            className={`flex items-center gap-2.5 px-4 py-2 rounded-xl transition-colors ${
               subTab === 'matches'
-                ? 'bg-red-600 text-white font-bold shadow-sm'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                ? 'bg-red-600 text-white font-bold shadow-md'
+                : 'text-zinc-300 hover:text-white hover:bg-zinc-800'
             }`}
           >
-            <Calendar className="w-3.5 h-3.5" />
+            <Calendar className="w-4 h-4" />
             <span>Partite &amp; Calendario ({matches.length})</span>
           </button>
 
           <button
             onClick={() => setSubTab('arena')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg transition-colors ${
+            className={`flex items-center gap-2.5 px-4 py-2 rounded-xl transition-colors ${
               subTab === 'arena'
-                ? 'bg-red-600 text-white font-bold shadow-sm'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                ? 'bg-red-600 text-white font-bold shadow-md'
+                : 'text-zinc-300 hover:text-white hover:bg-zinc-800'
             }`}
           >
-            <Building2 className="w-3.5 h-3.5" />
+            <Building2 className="w-4 h-4" />
             <span>Palazzetto (Arena)</span>
           </button>
 
           <button
             onClick={() => setSubTab('economy')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg transition-colors ${
+            className={`flex items-center gap-2.5 px-4 py-2 rounded-xl transition-colors ${
               subTab === 'economy'
-                ? 'bg-red-600 text-white font-bold shadow-sm'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                ? 'bg-red-600 text-white font-bold shadow-md'
+                : 'text-zinc-300 hover:text-white hover:bg-zinc-800'
             }`}
           >
-            <DollarSign className="w-3.5 h-3.5" />
+            <DollarSign className="w-4 h-4" />
             <span>Bilancio &amp; Economia</span>
           </button>
 
           <button
             onClick={() => setSubTab('stats')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg transition-colors ${
+            className={`flex items-center gap-2.5 px-4 py-2 rounded-xl transition-colors ${
               subTab === 'stats'
-                ? 'bg-red-600 text-white font-bold shadow-sm'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                ? 'bg-red-600 text-white font-bold shadow-md'
+                : 'text-zinc-300 hover:text-white hover:bg-zinc-800'
             }`}
           >
-            <BarChart3 className="w-3.5 h-3.5" />
+            <BarChart3 className="w-4 h-4" />
             <span>Statistiche</span>
           </button>
         </div>

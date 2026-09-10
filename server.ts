@@ -1,3 +1,6 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import express, { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import fs from 'fs';
@@ -83,28 +86,143 @@ function ensureDbDir(targetFilePath: string) {
   }
 }
 
+// Helper per pulire e normalizzare i percorsi dei database SQLite (rimuove virgolette spurie, spazi, espande ~)
+function cleanDbPath(rawPath?: string, fallbackPath: string = ''): string {
+  if (!rawPath || !rawPath.trim()) return fallbackPath;
+  let p = rawPath.trim().replace(/^["']+|["']+$/g, '').trim();
+  if (p.startsWith('~')) {
+    const home = process.env.HOME || '/home/fire';
+    p = path.join(home, p.slice(1));
+  }
+  return path.resolve(p);
+}
+
+// Helper per sincronizzare in modo forzato e non bloccante il file WAL sul database principale
+function applyWalCheckpoint(database: any, label: string) {
+  try {
+    const res = database.pragma('wal_checkpoint(TRUNCATE)');
+    return { ok: true, method: 'TRUNCATE', result: res };
+  } catch (e1) {
+    try {
+      const res = database.pragma('wal_checkpoint(RESTART)');
+      return { ok: true, method: 'RESTART', result: res };
+    } catch (e2) {
+      try {
+        const res = database.pragma('wal_checkpoint(PASSIVE)');
+        return { ok: true, method: 'PASSIVE', result: res };
+      } catch (e3: any) {
+        return { ok: false, error: e3.message };
+      }
+    }
+  }
+}
+
+// Helper di risoluzione intelligente dei database:
+// Se il file indicato non esiste o ha 0 byte, controlla varianti di case (es. FireHt.db vs fireht.db),
+// sottocartelle data/ o file .sqlite/.sqlite3 nella directory per evitare file fantasma vuoti da 0 byte!
+function resolveSmartDbPath(targetPath: string, label: string = 'DB'): { path: string; autoSwitched: boolean; reason?: string } {
+  const resolved = path.resolve(targetPath);
+  
+  if (fs.existsSync(resolved)) {
+    try {
+      const st = fs.statSync(resolved);
+      if (st.isFile() && st.size > 0) {
+        return { path: resolved, autoSwitched: false };
+      }
+    } catch {}
+  }
+
+  // Se non esiste o ha 0 byte, esplora directory correlate
+  const dir = path.dirname(resolved);
+  const baseName = path.basename(resolved);
+  const baseNameNoExt = baseName.replace(/\.[^/.]+$/, "");
+
+  const searchDirs = [
+    dir,
+    path.join(dir, 'data'),
+    path.dirname(dir),
+    path.join(path.dirname(dir), 'data')
+  ];
+
+  let bestMatch: { path: string; size: number; reason: string } | null = null;
+
+  for (const sDir of searchDirs) {
+    if (!fs.existsSync(sDir)) continue;
+    try {
+      const entries = fs.readdirSync(sDir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isFile()) continue;
+        const eName = entry.name;
+        if (eName.endsWith('-wal') || eName.endsWith('-shm') || eName.endsWith('-journal')) continue;
+        
+        const isDbExt = eName.endsWith('.db') || eName.endsWith('.sqlite') || eName.endsWith('.sqlite3');
+        if (!isDbExt) continue;
+
+        const candidate = path.join(sDir, eName);
+        try {
+          const cStat = fs.statSync(candidate);
+          if (cStat.size > 0) {
+            const cBaseNoExt = eName.replace(/\.[^/.]+$/, "");
+            const isCaseMatch = cBaseNoExt.toLowerCase() === baseNameNoExt.toLowerCase();
+
+            if (isCaseMatch) {
+              console.log(`[DB-RESOLVER] [${label}] Trovato file gemello con dati (${Math.round(cStat.size / 1024)} KB): ${candidate} anziché file vuoto/mancante: ${resolved}`);
+              return {
+                path: candidate,
+                autoSwitched: true,
+                reason: `Agganciato a file esistente ${eName} (${Math.round(cStat.size / 1024)} KB)`
+              };
+            }
+
+            if (!bestMatch || cStat.size > bestMatch.size) {
+              bestMatch = {
+                path: candidate,
+                size: cStat.size,
+                reason: `Agganciato a file SQLite con dimensione maggiore ${eName} (${Math.round(cStat.size / 1024)} KB) in ${sDir}`
+              };
+            }
+          }
+        } catch {}
+      }
+    } catch {}
+  }
+
+  if (bestMatch && bestMatch.size > 512) {
+    console.log(`[DB-RESOLVER] [${label}] ${resolved} non trovato o vuoto. Auto-agganciato a: ${bestMatch.path}`);
+    return { path: bestMatch.path, autoSwitched: true, reason: bestMatch.reason };
+  }
+
+  return { path: resolved, autoSwitched: false };
+}
+
 // 1. Masaniello (Masa) - Deploy locale: /home/fire/bots/Masa/data/masa.db
 const defaultMasaDbPath = isPreview
   ? path.join(process.cwd(), 'data', 'app.db')
   : '/home/fire/bots/Masa/data/masa.db';
-const dbPath = process.env.MASA_DB_PATH || process.env.DATABASE_PATH || process.env.DB_PATH || defaultMasaDbPath;
+const requestedMasaPath = cleanDbPath(process.env.MASA_DB_PATH || process.env.DATABASE_PATH || process.env.DB_PATH, defaultMasaDbPath);
+const masaResolution = resolveSmartDbPath(requestedMasaPath, 'MASANIELLO');
+const dbPath = masaResolution.path;
 ensureDbDir(dbPath);
 
 const db = new Database(dbPath);
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
+applyWalCheckpoint(db, 'MASANIELLO');
 
 // 2. BuzzerBeater - Deploy locale: /home/fire/bots/FireBuzzer/buzzerbeater.db
 const defaultBbeaterDbPath = isPreview
   ? (fs.existsSync(path.join(process.cwd(), 'data', 'bbeater.db')) ? path.join(process.cwd(), 'data', 'bbeater.db') : dbPath)
   : '/home/fire/bots/FireBuzzer/buzzerbeater.db';
-const bbeaterDbPath = process.env.BBEATER_DB_PATH || process.env.BUZZERBEATER_DB_PATH || defaultBbeaterDbPath;
+const requestedBbeaterPath = cleanDbPath(process.env.BBEATER_DB_PATH || process.env.BUZZERBEATER_DB_PATH, defaultBbeaterDbPath);
+const bbeaterResolution = resolveSmartDbPath(requestedBbeaterPath, 'BUZZERBEATER');
+const bbeaterDbPath = bbeaterResolution.path;
 ensureDbDir(bbeaterDbPath);
 
 const bbeaterDb = bbeaterDbPath === dbPath ? db : (() => {
   const bDb = new Database(bbeaterDbPath);
   bDb.pragma('journal_mode = WAL');
   bDb.pragma('foreign_keys = OFF');
+  applyWalCheckpoint(bDb, 'BUZZERBEATER');
   return bDb;
 })();
 
@@ -116,13 +234,16 @@ const defaultAndaDbPath = isPreview
           ? path.join(process.cwd(), 'data', 'anda.db')
           : dbPath))
   : '/home/fire/bots/AnDab/data/andab.db';
-const andaDbPath = process.env.ANDA_DB_PATH || process.env.ANDAB_DB_PATH || defaultAndaDbPath;
+const requestedAndaPath = cleanDbPath(process.env.ANDA_DB_PATH || process.env.ANDAB_DB_PATH, defaultAndaDbPath);
+const andaResolution = resolveSmartDbPath(requestedAndaPath, 'ANDA');
+const andaDbPath = andaResolution.path;
 ensureDbDir(andaDbPath);
 
 const andaDb = andaDbPath === dbPath ? db : (() => {
   const aDb = new Database(andaDbPath);
   aDb.pragma('journal_mode = WAL');
   aDb.pragma('foreign_keys = ON');
+  applyWalCheckpoint(aDb, 'ANDA');
   return aDb;
 })();
 
@@ -130,12 +251,26 @@ const andaDb = andaDbPath === dbPath ? db : (() => {
 const defaultHattrickDbPath = isPreview
   ? path.join(process.cwd(), 'data', 'hattrick.db')
   : '/home/fire/bots/FireHt/fireht.db';
-const hattrickDbPath = process.env.FIREHT_DB_PATH || process.env.HATTRICK_DB_PATH || process.env.HT_DB_PATH || defaultHattrickDbPath;
+
+const rawHtEnv = process.env.FIREHT_DB_PATH || process.env.HATTRICK_DB_PATH || process.env.HT_DB_PATH;
+const requestedHtPath = cleanDbPath(rawHtEnv, defaultHattrickDbPath);
+const htResolution = resolveSmartDbPath(requestedHtPath, 'HATTRICK');
+const hattrickDbPath = htResolution.path;
+
+const hattrickEnvVar = process.env.FIREHT_DB_PATH
+  ? 'FIREHT_DB_PATH'
+  : process.env.HATTRICK_DB_PATH
+  ? 'HATTRICK_DB_PATH'
+  : process.env.HT_DB_PATH
+  ? 'HT_DB_PATH'
+  : (isPreview ? 'DEFAULT_PREVIEW (./data/hattrick.db)' : 'DEFAULT_LOCAL (/home/fire/bots/FireHt/fireht.db)');
+
 ensureDbDir(hattrickDbPath);
 
 const hattrickDb = new Database(hattrickDbPath);
 hattrickDb.pragma('journal_mode = WAL');
-hattrickDb.pragma('foreign_keys = ON');
+hattrickDb.pragma('foreign_keys = OFF');
+applyWalCheckpoint(hattrickDb, 'HATTRICK');
 
 // Crea le tabelle secondo la specifica esatta dell'utente
 db.exec(`
@@ -472,7 +607,7 @@ async function startServer() {
   app.use('/api/anda', setupAnDa(andaDb));
 
   // Mount Hattrick Football Manager API (Database SQLite dedicato)
-  app.use('/api/hattrick', setupHattrick(hattrickDb, hattrickDbPath));
+  app.use('/api/hattrick', setupHattrick(hattrickDb, hattrickDbPath, hattrickEnvVar));
 
   // Status di sistema e database
   app.get('/api/system/status', (req: Request, res: Response) => {
@@ -485,33 +620,75 @@ async function startServer() {
       const totalEventi = (db.prepare('SELECT COUNT(*) as c FROM evento').get() as any).c;
       const activeMasa = (db.prepare('SELECT COUNT(*) as c FROM masa WHERE attivo = 1').get() as any).c;
       
+      // Rilevamento dinamico tabelle per evitare 0 righe causate da discrepanze di case o plurale
+      function getDynamicCount(database: any, candidateNames: string[], extraWhere: string = ''): { table: string; count: number } {
+        try {
+          const tables = (database.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all() as any[]).map(t => t.name);
+          for (const cand of candidateNames) {
+            const match = tables.find(t => t.toLowerCase() === cand.toLowerCase());
+            if (match) {
+              try {
+                const count = (database.prepare(`SELECT COUNT(*) as c FROM "${match}" ${extraWhere ? `WHERE ${extraWhere}` : ''}`).get() as any)?.c || 0;
+                return { table: match, count };
+              } catch {
+                try {
+                  const countAll = (database.prepare(`SELECT COUNT(*) as c FROM "${match}"`).get() as any)?.c || 0;
+                  return { table: match, count: countAll };
+                } catch {}
+              }
+            }
+          }
+        } catch {}
+        return { table: candidateNames[0] || 'unknown', count: 0 };
+      }
+
       let totalGiocatori = 0;
       let totalPartite = 0;
       try {
-        totalGiocatori = (bbeaterDb.prepare("SELECT COUNT(*) as c FROM giocatori WHERE (owner IS NOT NULL AND owner != 0 AND CAST(owner AS TEXT) != '0')").get() as any).c;
-        totalPartite = (bbeaterDb.prepare('SELECT COUNT(*) as c FROM partite').get() as any).c;
+        const pInfo = getDynamicCount(bbeaterDb, ['giocatori', 'roster', 'players'], "(owner IS NOT NULL AND owner != 0 AND CAST(owner AS TEXT) != '0')");
+        totalGiocatori = pInfo.count;
+        const mInfo = getDynamicCount(bbeaterDb, ['partite', 'matches', 'games']);
+        totalPartite = mInfo.count;
       } catch (e) {}
 
       let totalRecipes = 0;
       let totalCategories = 0;
       try {
-        totalRecipes = (andaDb.prepare('SELECT COUNT(*) as c FROM recipes').get() as any).c;
-        totalCategories = (andaDb.prepare('SELECT COUNT(*) as c FROM categories').get() as any).c;
+        totalRecipes = getDynamicCount(andaDb, ['recipes', 'ricette', 'recipe']).count;
+        totalCategories = getDynamicCount(andaDb, ['categories', 'categorie', 'category']).count;
       } catch (e) {}
 
       let totalHtPlayers = 0;
       let totalHtTeams = 0;
       try {
-        totalHtPlayers = (hattrickDb.prepare('SELECT COUNT(*) as c FROM "Player"').get() as any).c;
-        totalHtTeams = (hattrickDb.prepare('SELECT COUNT(*) as c FROM "TeamDetails"').get() as any).c;
+        totalHtPlayers = getDynamicCount(hattrickDb, ['Player', 'players', 'player', 'ht_player', 'ht_players', 'giocatori', 'roster']).count;
+        totalHtTeams = getDynamicCount(hattrickDb, ['TeamDetails', 'team_details', 'teams', 'team', 'club']).count;
       } catch (e) {}
 
-      const getDbInfo = (p: string, extra?: Record<string, any>) => ({
-        path: p,
-        exists: fs.existsSync(p),
-        sizeKB: fs.existsSync(p) ? Math.round(fs.statSync(p).size / 1024 * 10) / 10 : 0,
-        ...extra
-      });
+      const getDbInfo = (p: string, extra?: Record<string, any>) => {
+        const exists = fs.existsSync(p);
+        let sizeKB = 0;
+        let walExists = false;
+        let walSizeKB = 0;
+        if (exists) {
+          try {
+            sizeKB = Math.round(fs.statSync(p).size / 1024 * 10) / 10;
+            const walPath = `${p}-wal`;
+            if (fs.existsSync(walPath)) {
+              walExists = true;
+              walSizeKB = Math.round(fs.statSync(walPath).size / 1024 * 10) / 10;
+            }
+          } catch {}
+        }
+        return {
+          path: p,
+          exists,
+          sizeKB,
+          walExists,
+          walSizeKB,
+          ...extra
+        };
+      };
 
       res.json({
         ok: true,
@@ -532,13 +709,13 @@ async function startServer() {
         totalHtPlayers,
         totalHtTeams,
         databases: {
-          masa: getDbInfo(dbPath, { totalMasa, totalEventi }),
+          masa: getDbInfo(dbPath, { totalMasa, totalEventi, resolution: masaResolution }),
           masaniello: getDbInfo(dbPath, { totalMasa, totalEventi }),
-          bbeater: getDbInfo(bbeaterDbPath, { totalGiocatori, totalPartite }),
+          bbeater: getDbInfo(bbeaterDbPath, { totalGiocatori, totalPartite, resolution: bbeaterResolution }),
           buzzerbeater: getDbInfo(bbeaterDbPath, { totalGiocatori, totalPartite }),
-          anda: getDbInfo(andaDbPath, { totalRecipes, totalCategories }),
-          hattrick: getDbInfo(hattrickDbPath, { totalPlayers: totalHtPlayers, totalTeams: totalHtTeams }),
-          fireht: getDbInfo(hattrickDbPath, { totalPlayers: totalHtPlayers, totalTeams: totalHtTeams })
+          anda: getDbInfo(andaDbPath, { totalRecipes, totalCategories, resolution: andaResolution }),
+          hattrick: getDbInfo(hattrickDbPath, { totalPlayers: totalHtPlayers, totalTeams: totalHtTeams, resolution: htResolution }),
+          fireht: getDbInfo(hattrickDbPath, { totalPlayers: totalHtPlayers, totalTeams: totalHtTeams, resolution: htResolution })
         },
         port: PORT,
         pid: process.pid,
@@ -549,6 +726,185 @@ async function startServer() {
       });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Diagnostica dettagliata di tutti i database SQLite del sistema
+  app.get('/api/system/databases', (req: Request, res: Response) => {
+    try {
+      const inspectDb = (database: any, dbFilePath: string, resolution: any) => {
+        const exists = fs.existsSync(dbFilePath);
+        let sizeBytes = 0;
+        let sizeKB = 0;
+        let isWritable = false;
+        let isReadable = false;
+        let wal = { exists: false, sizeKB: 0 };
+        let shm = { exists: false, sizeKB: 0 };
+        const tables: Array<{ name: string; count: number; columns: string[] }> = [];
+
+        if (exists) {
+          try {
+            const st = fs.statSync(dbFilePath);
+            sizeBytes = st.size;
+            sizeKB = Math.round(st.size / 1024 * 10) / 10;
+            fs.accessSync(dbFilePath, fs.constants.R_OK);
+            isReadable = true;
+            fs.accessSync(dbFilePath, fs.constants.W_OK);
+            isWritable = true;
+          } catch {}
+
+          try {
+            const walPath = `${dbFilePath}-wal`;
+            if (fs.existsSync(walPath)) {
+              wal = { exists: true, sizeKB: Math.round(fs.statSync(walPath).size / 1024 * 10) / 10 };
+            }
+            const shmPath = `${dbFilePath}-shm`;
+            if (fs.existsSync(shmPath)) {
+              shm = { exists: true, sizeKB: Math.round(fs.statSync(shmPath).size / 1024 * 10) / 10 };
+            }
+          } catch {}
+
+          try {
+            const tList = database.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all() as any[];
+            for (const t of tList) {
+              let count = 0;
+              let cols: string[] = [];
+              try {
+                count = (database.prepare(`SELECT COUNT(*) as c FROM "${t.name}"`).get() as any)?.c || 0;
+              } catch {}
+              try {
+                cols = (database.prepare(`PRAGMA table_info("${t.name}")`).all() as any[]).map(c => c.name);
+              } catch {}
+              tables.push({ name: t.name, count, columns: cols });
+            }
+          } catch {}
+        }
+
+        // Esplora file fratelli (siblings) nella directory
+        let siblings: Array<{ name: string; sizeKB: number; isDb: boolean }> = [];
+        try {
+          const dir = path.dirname(dbFilePath);
+          if (fs.existsSync(dir)) {
+            const entries = fs.readdirSync(dir, { withFileTypes: true });
+            siblings = entries
+              .filter(e => e.isFile() && !e.name.endsWith('-wal') && !e.name.endsWith('-shm'))
+              .map(e => {
+                let sKB = 0;
+                try { sKB = Math.round(fs.statSync(path.join(dir, e.name)).size / 1024 * 10) / 10; } catch {}
+                return {
+                  name: e.name,
+                  sizeKB: sKB,
+                  isDb: e.name.endsWith('.db') || e.name.endsWith('.sqlite') || e.name.endsWith('.sqlite3')
+                };
+              });
+          }
+        } catch {}
+
+        return {
+          path: dbFilePath,
+          exists,
+          sizeBytes,
+          sizeKB,
+          isReadable,
+          isWritable,
+          wal,
+          shm,
+          resolution,
+          tables,
+          siblings
+        };
+      };
+
+      res.json({
+        ok: true,
+        databases: {
+          masaniello: inspectDb(db, dbPath, masaResolution),
+          buzzerbeater: inspectDb(bbeaterDb, bbeaterDbPath, bbeaterResolution),
+          anda: inspectDb(andaDb, andaDbPath, andaResolution),
+          hattrick: inspectDb(hattrickDb, hattrickDbPath, htResolution)
+        }
+      });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: err.message });
+    }
+  });
+
+  // Query Runner globale (sola lettura) per testare qualsiasi dei 4 database
+  app.post('/api/system/query-database', (req: Request, res: Response) => {
+    try {
+      const { module = 'hattrick', sql } = req.body;
+      if (!sql || typeof sql !== 'string') {
+        return res.status(400).json({ ok: false, error: 'Parametro sql obbligatorio' });
+      }
+
+      const trimmed = sql.trim();
+      const upper = trimmed.toUpperCase();
+      const isReadOnly = upper.startsWith('SELECT') || upper.startsWith('PRAGMA') || upper.startsWith('EXPLAIN') || upper.startsWith('WITH');
+      if (!isReadOnly) {
+        return res.status(403).json({ ok: false, error: 'Solo query di lettura (SELECT, PRAGMA, EXPLAIN, WITH) sono consentite.' });
+      }
+
+      let targetDb = hattrickDb;
+      let targetPath = hattrickDbPath;
+      if (module === 'masa' || module === 'masaniello') {
+        targetDb = db;
+        targetPath = dbPath;
+      } else if (module === 'bbeater' || module === 'buzzerbeater') {
+        targetDb = bbeaterDb;
+        targetPath = bbeaterDbPath;
+      } else if (module === 'anda' || module === 'culinary') {
+        targetDb = andaDb;
+        targetPath = andaDbPath;
+      }
+
+      const t0 = Date.now();
+      const rows = targetDb.prepare(trimmed).all();
+      const durationMs = Date.now() - t0;
+      const columns = rows.length > 0 ? Object.keys(rows[0] as object) : [];
+
+      let pragmaFile = '';
+      try {
+        const dblist = targetDb.prepare("PRAGMA database_list").all() as any[];
+        pragmaFile = dblist.find((d: any) => d.name === 'main')?.file || '';
+      } catch {}
+
+      res.json({
+        ok: true,
+        module,
+        sql: trimmed,
+        count: rows.length,
+        durationMs,
+        columns,
+        rows,
+        targetPath,
+        sqliteFileAttached: pragmaFile
+      });
+    } catch (err: any) {
+      res.status(400).json({ ok: false, error: err.message });
+    }
+  });
+
+  // Forzatura checkpoint WAL per qualsiasi database
+  app.post('/api/system/checkpoint-database', (req: Request, res: Response) => {
+    try {
+      const { module = 'hattrick' } = req.body;
+      let targetDb = hattrickDb;
+      let label = 'HATTRICK';
+      if (module === 'masa' || module === 'masaniello') {
+        targetDb = db;
+        label = 'MASANIELLO';
+      } else if (module === 'bbeater' || module === 'buzzerbeater') {
+        targetDb = bbeaterDb;
+        label = 'BUZZERBEATER';
+      } else if (module === 'anda' || module === 'culinary') {
+        targetDb = andaDb;
+        label = 'ANDA';
+      }
+
+      const result = applyWalCheckpoint(targetDb, label);
+      res.json({ ok: true, module, label, result });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: err.message });
     }
   });
 

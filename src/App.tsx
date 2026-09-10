@@ -205,21 +205,21 @@ export default function App() {
         isRefreshing={isRefreshing}
       />
 
-      {/* Main Content Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      {/* Main Content Container - Expanded Full-Width Responsive Canvas */}
+      <main className="flex-1 max-w-[1850px] w-full mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 py-6">
         {loading ? (
-          <div className="flex flex-col items-center justify-center min-h-[400px] text-zinc-500 gap-3 font-mono">
-            <RefreshCw className="w-8 h-8 animate-spin text-red-500" />
-            <span className="text-xs">Connessione a Express e apertura SQLite filesystem locale...</span>
+          <div className="flex flex-col items-center justify-center min-h-[420px] text-zinc-400 gap-3 font-mono">
+            <RefreshCw className="w-9 h-9 animate-spin text-red-500" />
+            <span className="text-sm font-medium">Connessione a Express e apertura SQLite filesystem locale...</span>
           </div>
         ) : error ? (
-          <div className="p-6 bg-red-950/40 border border-red-800 rounded-2xl text-red-300 max-w-lg mx-auto my-12 text-center space-y-3 font-mono">
-            <AlertCircle className="w-10 h-10 text-red-400 mx-auto" />
-            <h3 className="font-bold text-lg text-white font-sans">Impossibile comunicare con il backend</h3>
-            <p className="text-xs text-red-300">{error}</p>
+          <div className="p-8 bg-red-950/40 border border-red-800 rounded-2xl text-red-300 max-w-xl mx-auto my-12 text-center space-y-4 font-mono">
+            <AlertCircle className="w-12 h-12 text-red-400 mx-auto" />
+            <h3 className="font-bold text-xl text-white font-sans">Impossibile comunicare con il backend</h3>
+            <p className="text-sm text-red-300">{error}</p>
             <button
               onClick={loadData}
-              className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-semibold shadow"
+              className="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-semibold shadow"
             >
               Riprova connessione
             </button>
@@ -251,14 +251,14 @@ export default function App() {
             <StatsBanner masas={masas} system={system} />
 
             {/* Filter and Search Bar in Bento container */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-zinc-900 border border-zinc-800 p-3 rounded-2xl shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-zinc-900 border border-zinc-800 p-4 rounded-2xl shadow-sm">
               {/* Tabs */}
-              <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-xl border border-zinc-800 text-xs font-mono font-medium">
+              <div className="flex items-center gap-1.5 bg-zinc-950 p-1.5 rounded-xl border border-zinc-800 text-sm font-mono font-medium">
                 <button
                   onClick={() => setFilterTab('active')}
-                  className={`px-3 py-1.5 rounded-lg transition-all ${
+                  className={`px-4 py-2 rounded-lg transition-all ${
                     filterTab === 'active'
-                      ? 'bg-red-600 text-white shadow-sm'
+                      ? 'bg-red-600 text-white font-bold shadow-sm'
                       : 'text-zinc-400 hover:text-zinc-200'
                   }`}
                 >
@@ -266,9 +266,9 @@ export default function App() {
                 </button>
                 <button
                   onClick={() => setFilterTab('closed')}
-                  className={`px-3 py-1.5 rounded-lg transition-all ${
+                  className={`px-4 py-2 rounded-lg transition-all ${
                     filterTab === 'closed'
-                      ? 'bg-zinc-800 text-white shadow-sm'
+                      ? 'bg-zinc-800 text-white font-bold shadow-sm'
                       : 'text-zinc-400 hover:text-zinc-200'
                   }`}
                 >
@@ -276,9 +276,9 @@ export default function App() {
                 </button>
                 <button
                   onClick={() => setFilterTab('all')}
-                  className={`px-3 py-1.5 rounded-lg transition-all ${
+                  className={`px-4 py-2 rounded-lg transition-all ${
                     filterTab === 'all'
-                      ? 'bg-zinc-800 text-white shadow-sm'
+                      ? 'bg-zinc-800 text-white font-bold shadow-sm'
                       : 'text-zinc-400 hover:text-zinc-200'
                   }`}
                 >
@@ -287,21 +287,21 @@ export default function App() {
               </div>
 
               {/* Search input */}
-              <div className="relative w-full sm:w-80">
-                <Search className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <div className="relative w-full sm:w-96">
+                <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
                   placeholder="Filtra per nome o pronostico..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-3.5 py-1.5 bg-zinc-950 border border-zinc-800 rounded-xl text-xs font-mono text-white placeholder-zinc-500 focus:outline-none focus:border-red-500 transition-colors"
+                  className="w-full pl-10 pr-4 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-sm font-mono text-white placeholder-zinc-500 focus:outline-none focus:border-red-500 transition-colors"
                 />
               </div>
             </div>
 
-            {/* Masaniello Grid */}
+            {/* Masaniello Grid - Expanded 4 Columns on widescreen */}
             {filteredMasas.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
                 {filteredMasas.map((m) => (
                   <MasaCard
                     key={m.id}
@@ -316,13 +316,13 @@ export default function App() {
                 ))}
               </div>
             ) : (
-              <div className="p-12 text-center bg-zinc-900 border border-zinc-800 rounded-2xl shadow-sm space-y-4">
-                <div className="w-12 h-12 rounded-xl bg-zinc-950 border border-zinc-800 flex items-center justify-center mx-auto text-zinc-500">
-                  <Layers className="w-6 h-6" />
+              <div className="p-16 text-center bg-zinc-900 border border-zinc-800 rounded-2xl shadow-sm space-y-4">
+                <div className="w-14 h-14 rounded-2xl bg-zinc-950 border border-zinc-800 flex items-center justify-center mx-auto text-zinc-400">
+                  <Layers className="w-7 h-7" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-white text-base">Nessun Masaniello trovato</h3>
-                  <p className="text-xs text-zinc-400 max-w-sm mx-auto mt-1 font-mono">
+                  <h3 className="font-bold text-white text-lg">Nessun Masaniello trovato</h3>
+                  <p className="text-sm text-zinc-400 max-w-md mx-auto mt-1.5 font-mono">
                     {searchQuery
                       ? 'Nessun piano corrisponde ai criteri di ricerca.'
                       : 'Non hai ancora creato nessun piano Masaniello per questo filtro.'}

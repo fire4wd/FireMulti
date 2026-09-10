@@ -202,87 +202,87 @@ export const AndaDashboard: React.FC<AndaDashboardProps> = ({
   return (
     <div className="space-y-6">
       {/* Top Bento Stats Banner */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
         {/* Total Recipes */}
-        <div className="bg-zinc-900/90 border border-zinc-800 p-4 rounded-2xl flex items-center justify-between shadow-sm">
+        <div className="bg-zinc-900/90 border border-zinc-800 p-5 rounded-2xl flex items-center justify-between shadow-sm">
           <div>
-            <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 block">Ricette Totali</span>
-            <div className="text-2xl sm:text-3xl font-black text-white font-mono mt-1">
+            <span className="text-xs font-mono uppercase tracking-wider text-zinc-400 block font-bold">Ricette Totali</span>
+            <div className="text-3xl sm:text-4xl font-black text-white font-mono mt-1">
               {recipes.length}
             </div>
-            <span className="text-[10px] text-zinc-500 font-mono">in archivio locale</span>
+            <span className="text-xs text-zinc-500 font-mono mt-0.5 block">in archivio locale</span>
           </div>
-          <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
-            <ChefHat className="w-5 h-5" />
+          <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
+            <ChefHat className="w-6 h-6" />
           </div>
         </div>
 
         {/* Parametric Recipes */}
-        <div className="bg-zinc-900/90 border border-zinc-800 p-4 rounded-2xl flex items-center justify-between shadow-sm">
+        <div className="bg-zinc-900/90 border border-zinc-800 p-5 rounded-2xl flex items-center justify-between shadow-sm">
           <div>
-            <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 block">Calcolatori Parametrici</span>
-            <div className="text-2xl sm:text-3xl font-black text-amber-400 font-mono mt-1">
+            <span className="text-xs font-mono uppercase tracking-wider text-zinc-400 block font-bold">Calcolatori Parametrici</span>
+            <div className="text-3xl sm:text-4xl font-black text-amber-400 font-mono mt-1">
               {recipes.filter((r) => r.is_parametric).length}
             </div>
-            <span className="text-[10px] text-zinc-500 font-mono">con scaling dinamico</span>
+            <span className="text-xs text-zinc-500 font-mono mt-0.5 block">con scaling dinamico</span>
           </div>
-          <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
-            <Calculator className="w-5 h-5" />
+          <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
+            <Calculator className="w-6 h-6" />
           </div>
         </div>
 
         {/* Categories */}
-        <div className="bg-zinc-900/90 border border-zinc-800 p-4 rounded-2xl flex items-center justify-between shadow-sm">
+        <div className="bg-zinc-900/90 border border-zinc-800 p-5 rounded-2xl flex items-center justify-between shadow-sm">
           <div>
-            <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 block">Categorie</span>
-            <div className="text-2xl sm:text-3xl font-black text-white font-mono mt-1">
+            <span className="text-xs font-mono uppercase tracking-wider text-zinc-400 block font-bold">Categorie</span>
+            <div className="text-3xl sm:text-4xl font-black text-white font-mono mt-1">
               {categories.length}
             </div>
-            <span className="text-[10px] text-zinc-500 font-mono">pizze, impasti, dolci</span>
+            <span className="text-xs text-zinc-500 font-mono mt-0.5 block">pizze, impasti, dolci</span>
           </div>
-          <div className="w-10 h-10 rounded-xl bg-zinc-950 border border-zinc-800 flex items-center justify-center text-zinc-400">
-            <Layers className="w-5 h-5" />
+          <div className="w-12 h-12 rounded-xl bg-zinc-950 border border-zinc-800 flex items-center justify-center text-zinc-400 shrink-0">
+            <Layers className="w-6 h-6" />
           </div>
         </div>
 
         {/* Action button card */}
-        <div className="bg-gradient-to-br from-amber-950/30 to-zinc-900 border border-amber-500/30 p-4 rounded-2xl flex flex-col justify-between shadow-sm">
+        <div className="bg-gradient-to-br from-amber-950/30 to-zinc-900 border border-amber-500/30 p-5 rounded-2xl flex flex-col justify-between shadow-sm">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-mono uppercase tracking-wider text-amber-400 block">Azioni AnDa</span>
-            <Sparkles className="w-4 h-4 text-amber-400" />
+            <span className="text-xs font-mono uppercase tracking-wider text-amber-400 block font-bold">Azioni AnDa</span>
+            <Sparkles className="w-5 h-5 text-amber-400" />
           </div>
-          <div className="flex items-center gap-2 mt-2">
+          <div className="flex items-center gap-2.5 mt-3">
             <button
               onClick={() => {
                 setEditingRecipe(null);
                 setIsRecipeModalOpen(true);
               }}
-              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs font-mono shadow-md shadow-amber-950/40 transition-all active:scale-95"
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-sm font-mono shadow-md shadow-amber-950/40 transition-all active:scale-95"
             >
-              <Plus className="w-3.5 h-3.5" />
+              <Plus className="w-4 h-4" />
               <span>Nuova Ricetta</span>
             </button>
             <button
               onClick={() => setIsCategoryModalOpen(true)}
-              className="p-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white"
+              className="p-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white"
               title="Gestisci Categorie"
             >
-              <FolderPlus className="w-4 h-4" />
+              <FolderPlus className="w-5 h-5" />
             </button>
           </div>
         </div>
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-2xl space-y-3 shadow-sm">
+      <div className="bg-zinc-900 border border-zinc-800 p-5 rounded-2xl space-y-4 shadow-sm">
         {/* Category Pills */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none font-mono text-xs">
+        <div className="flex items-center gap-2.5 overflow-x-auto pb-1 scrollbar-none font-mono text-sm">
           <button
             onClick={() => setSelectedCategorySlug('all')}
-            className={`px-3 py-1.5 rounded-xl whitespace-nowrap transition-all border ${
+            className={`px-4 py-2 rounded-xl whitespace-nowrap transition-all border ${
               selectedCategorySlug === 'all'
                 ? 'bg-amber-500 text-zinc-950 border-amber-400 font-bold shadow-md'
-                : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:text-white hover:border-zinc-700'
+                : 'bg-zinc-950 text-zinc-300 border-zinc-800 hover:text-white hover:border-zinc-700'
             }`}
           >
             Tutte le Ricette ({recipes.length})
@@ -293,16 +293,16 @@ export const AndaDashboard: React.FC<AndaDashboardProps> = ({
               <button
                 key={cat.id}
                 onClick={() => setSelectedCategorySlug(cat.slug)}
-                className={`px-3 py-1.5 rounded-xl whitespace-nowrap transition-all border flex items-center gap-1.5 ${
+                className={`px-4 py-2 rounded-xl whitespace-nowrap transition-all border flex items-center gap-2 ${
                   isSelected
                     ? 'bg-amber-500 text-zinc-950 border-amber-400 font-bold shadow-md'
-                    : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:text-white hover:border-zinc-700'
+                    : 'bg-zinc-950 text-zinc-300 border-zinc-800 hover:text-white hover:border-zinc-700'
                 }`}
               >
                 <span>{cat.name}</span>
                 {cat.recipe_count !== undefined && cat.recipe_count > 0 && (
-                  <span className={`text-[10px] px-1.5 py-0.2 rounded ${
-                    isSelected ? 'bg-zinc-950/20 text-zinc-900 font-bold' : 'bg-zinc-900 text-zinc-500'
+                  <span className={`text-xs px-2 py-0.5 rounded font-bold ${
+                    isSelected ? 'bg-zinc-950/20 text-zinc-900' : 'bg-zinc-900 text-zinc-400'
                   }`}>
                     {cat.recipe_count}
                   </span>
@@ -313,24 +313,24 @@ export const AndaDashboard: React.FC<AndaDashboardProps> = ({
         </div>
 
         {/* Search & Sub-filters */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-zinc-800/80">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-zinc-800/80">
           <div className="relative flex-1">
-            <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-2.5" />
+            <Search className="w-5 h-5 text-zinc-400 absolute left-3.5 top-3" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Cerca ricetta per nome o ingrediente..."
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-amber-500 font-mono"
+              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-11 pr-4 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-amber-500 font-mono"
             />
           </div>
 
-          <div className="flex items-center gap-2 font-mono text-xs">
+          <div className="flex items-center gap-2.5 font-mono text-sm">
             {/* Difficulty Filter */}
             <select
               value={difficultyFilter}
               onChange={(e) => setDifficultyFilter(e.target.value)}
-              className="bg-zinc-950 border border-zinc-800 rounded-xl px-2.5 py-2 text-zinc-300 focus:outline-none focus:border-amber-500"
+              className="bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-zinc-200 focus:outline-none focus:border-amber-500 font-medium"
             >
               <option value="all">Difficoltà: Tutte</option>
               <option value="Facile">Facile</option>
@@ -342,13 +342,13 @@ export const AndaDashboard: React.FC<AndaDashboardProps> = ({
             {/* Parametric toggle button */}
             <button
               onClick={() => setOnlyParametric((p) => !p)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border transition-all ${
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border transition-all ${
                 onlyParametric
                   ? 'bg-amber-500/20 border-amber-500/50 text-amber-400 font-bold'
-                  : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-white'
+                  : 'bg-zinc-950 border-zinc-800 text-zinc-300 hover:text-white font-medium'
               }`}
             >
-              <Calculator className="w-3.5 h-3.5" />
+              <Calculator className="w-4 h-4" />
               <span className="hidden sm:inline">Solo Parametriche</span>
             </button>
           </div>
